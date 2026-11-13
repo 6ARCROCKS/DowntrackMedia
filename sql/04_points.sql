@@ -52,8 +52,8 @@ insert into dt.points_event_override (event_id, kind, note) values
   (300, 'nat', '2026 JEGS SPORTSnationals, Beech Bend, Bowling Green (BK1, moved to Aug 26-30)')
 on conflict (event_id) do update set kind = excluded.kind, note = excluded.note;
 
--- 1c. Work-in points for races NHRA scored but never published results for (from NHRA points sheets).
---     Real results always win: a manual row is used only when no result exists for that racer, class and event.
+-- 1c. NHRA points-sheet values: races NHRA never published results for, and races whose published
+--     results are missing rounds (bracket doesn't add up). A row here replaces the computed score.
 create table if not exists dt.points_manual (
   season      smallint not null,
   category_id int      not null,
@@ -159,7 +159,6 @@ manual as (
   join dt.series s   on s.id = ev.series_id
   join dt.category c on c.id = m.category_id
   left join dt.points_event_override o on o.event_id = ev.id
-  where not exists (select 1 from scored x where x.driver_id = m.driver_id and x.category_id = m.category_id and x.event_id = m.event_id)
 )
 -- One score per driver per event per class (keep the best if entered twice)
 select distinct on (driver_id, category_id, event_id)
@@ -167,7 +166,9 @@ select distinct on (driver_id, category_id, event_id)
   field_n, last_round, is_win, is_ru, points
 from (
   select entry_id, driver_id, category_id, slug, season, event_id, event_name, event_date, kind, division,
-         field_n::bigint, last_round::int, is_win, is_ru, points from scored
+         field_n::bigint, last_round::int, is_win, is_ru, points from scored x
+  where not exists (select 1 from dt.points_manual m   -- an NHRA points-sheet value replaces a computed score
+                    where m.driver_id = x.driver_id and m.category_id = x.category_id and m.event_id = x.event_id)
   union all
   select * from manual
 ) u
