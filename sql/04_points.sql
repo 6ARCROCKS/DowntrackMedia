@@ -116,7 +116,7 @@ with elim as (
 ),
 field as (  -- NHRA scores by ladder size: the larger of 2^rounds and the next power of two above the cars in eliminations
   select race_id, count(*) as field_n, max(last_round) as rounds_n,
-         greatest(power(2, max(last_round)), power(2, ceil(log(2, greatest(count(*), 2)::numeric))))::int as ladder_n
+         greatest(power(2, least(coalesce(max(last_round), 1), 10)), power(2, least(ceil(log(2, greatest(count(*), 2)::numeric)), 10)))::int as ladder_n
   from elim group by race_id
 ),
 qual as (  -- qualifying position from best qualifying ET when the source didn't record it (Top Alcohol bonus points)
