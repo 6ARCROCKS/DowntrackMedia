@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { db, one, all, byIds, indexBy } from '@/lib/db';
-import { DIVISIONS, parseScope, scopeHref, pointsRace, mustBeat } from '@/lib/points';
-import { date } from '@/lib/format';
+import { one, all, byIds, indexBy } from '@/lib/db';
+import { DIVISIONS, parseScope, scopeHref, pointsRace } from '@/lib/points';
 import PointsChart from '@/components/PointsChart';
+import SeasonSelect from '@/components/SeasonSelect';
+import StandingsTable from '@/components/StandingsTable';
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -16,10 +17,14 @@ export async function generateMetadata({ params }) {
   const scope = parseScope(params.p);
   if (!cat || !scope) return {};
   const where = scope.division ? `Division ${scope.division}` : 'National';
-  return { title: `${cat.name} ${where} points`, description: `${cat.name} ${where.toLowerCase()} Lucas Oil points standings and every counted race.` };
+  const what = scope.records ? 'records' : 'points';
+  return { title: `${cat.name} ${where} ${what}`, description: `${cat.name} ${where.toLowerCase()} Lucas Oil ${what}.` };
 }
 
-const gap = (n) => (n > 0 ? `−${n}` : '—');
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monYear = (iso) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}` : '');
+const monDay = (iso) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : '');
+const resultOf = (e) => (e.is_win ? 'Win' : e.is_ru ? 'Runner-up' : '');
 
 export default async function PointsPage({ params }) {
   const scope = parseScope(params.p);
@@ -31,205 +36,314 @@ export default async function PointsPage({ params }) {
   if (!cat || !rule) notFound();
 
   const mode = scope.division ? 'division' : 'national';
+  if (mode === 'division' && !rule.has_division) notFound();
   if (mode === 'national' && !rule.has_national) {
     return (
       <div className="stack">
-        <header><Link href="/points" className="small">← Points</Link><h1 style={{ marginTop: 6 }}>{cat.name}</h1></header>
-        <div className="panel"><div className="empty">{cat.name} has divisional standings only. Pick a division below.</div></div>
+        <h1>{cat.name}</h1>
+        <div className="card">{cat.name} has divisional standings only. Pick a division:</div>
         <nav className="tabs">{DIVISIONS.map((d) => <Link key={d} href={`/points/${cat.slug}/division-${d}`}>Div. {d}</Link>)}</nav>
       </div>
     );
   }
-  if (mode === 'division' && !rule.has_division) notFound();
 
   const table = mode === 'division' ? 'pts_division' : 'pts_national';
-  const seasonsRaw = await db(`${table}?select=season&category_id=eq.${cat.id}&order=season.desc&limit=1000`);
-  const seasons = [...new Set(seasonsRaw.map((r) => r.season))];
+  const divFilter = mode === 'division' ? `&division=eq.${scope.division}` : '';
+  const seasonRows = await all(`${table}?select=season&category_id=eq.${cat.id}${divFilter}&rank=eq.1`, { maxRows: 200 });
+  const seasons = [...new Set(seasonRows.map((r) => r.season))].sort((a, b) => b - a);
   const latest = seasons[0];
+  const thisYear = new Date().getFullYear();
+
+  const tabs = (
+    <nav className="tabs" aria-label="Standings">
+      {rule.has_national && (
+        <Link href={scopeHref(cat.slug, null, null, latest, scope.records)} aria-current={mode === 'national' ? 'page' : undefined}>National</Link>
+      )}
+      {rule.has_division && DIVISIONS.map((d) => (
+        <Link key={d} href={scopeHref(cat.slug, d, null, latest, scope.records)} aria-current={scope.division === d ? 'page' : undefined}>Div. {d}</Link>
+      ))}
+      <span style={{ width: 12 }} />
+      <Link href={scopeHref(cat.slug, scope.division, null, latest)} aria-current={!scope.records ? 'page' : undefined}>Season</Link>
+      <Link href={scopeHref(cat.slug, scope.division, null, latest, true)} aria-current={scope.records ? 'page' : undefined}>Records</Link>
+    </nav>
+  );
+  const where = mode === 'division' ? `Division ${scope.division}` : 'National';
+
+  if (scope.records) {
+    return <Records cat={cat} mode={mode} scope={scope} table={table} divFilter={divFilter} latest={latest} thisYear={thisYear} tabs={tabs} where={where} />;
+  }
+
   const season = scope.season || latest;
   if (scope.season && !seasons.includes(scope.season)) notFound();
+  const live = season === thisYear;
 
-  const divFilter = mode === 'division' ? `&division=eq.${scope.division}` : '';
   const standings = season
-    ? await all(`${table}?select=*&season=eq.${season}&category_id=eq.${cat.id}${divFilter}&order=rank,driver_id`, { maxRows: 3000 })
+    ? await all(`${table}?select=*&season=eq.${season}&category_id=eq.${cat.id}${divFilter}&order=rank,driver_id`, { maxRows: 5000 })
     : [];
   const names = indexBy(await byIds('driver', 'id', standings.map((s) => s.driver_id), 'id,display_name'));
+  const name = (id) => names[id]?.display_name || 'Unknown racer';
 
-  // Events for the top 10, for the chart and "what's left".
-  const top = standings.slice(0, 10);
-  const evRows = top.length
-    ? await db(`pts_event?select=driver_id,event_id,event_name,event_date,kind,division,points,is_win,is_ru&season=eq.${season}&category_id=eq.${cat.id}&driver_id=in.(${top.map((t) => t.driver_id).join(',')})&order=event_date&limit=2000`)
+  // Every result this season in this class (for the tap-to-expand lists, the chart and the events panel).
+  const evRows = season
+    ? await all(`pts_event?select=driver_id,event_id,event_name,event_date,kind,division,points,is_win,is_ru,field_n&season=eq.${season}&category_id=eq.${cat.id}&order=event_date,event_id`, { maxRows: 30000 })
     : [];
+  const meta = indexBy(await byIds('event', 'id', [...new Set(evRows.map((e) => e.event_id))], 'id,venue_id'));
+  const venues = indexBy(await byIds('venue', 'id', Object.values(meta).map((m) => m.venue_id), 'id,name,city'));
+  const place = (eid) => venues[meta[eid]?.venue_id];
+  const label = (e) =>
+    e.kind === 'nat'
+      ? place(e.event_id)?.city || e.event_name
+      : `Div ${e.division}${place(e.event_id)?.name ? ` · ${place(e.event_id).name}` : ''}`;
+
+  const inScope = (e) => (mode === 'national' ? true : e.kind === 'div');
   const evBy = {};
-  for (const e of evRows) (evBy[e.driver_id] ||= []).push(e);
-  const homeBy = Object.fromEntries(top.map((t) => [t.driver_id, scope.division]));
-  const race = pointsRace(
-    Object.fromEntries(top.slice(0, 8).map((t) => [t.driver_id, evBy[t.driver_id] || []])),
-    rule,
-    mode,
-    homeBy,
-  );
-  const lines = top.slice(0, 8).map((t) => ({
-    id: t.driver_id,
-    name: names[t.driver_id]?.display_name?.split(' ').slice(-1)[0] || '?',
-    values: race.series[t.driver_id] || [],
+  for (const e of evRows) if (inScope(e)) (evBy[e.driver_id] ||= []).push(e);
+
+  const rows = standings.map((s) => {
+    const counted = new Set(s.counted_events || []);
+    return {
+      id: s.driver_id,
+      rank: s.rank,
+      name: name(s.driver_id),
+      total: s.total,
+      div: s.div_pts,
+      nat: s.nat_pts,
+      counted: s.events_counted,
+      events: (evBy[s.driver_id] || []).map((e) => ({
+        id: e.event_id,
+        label: label(e),
+        date: monDay(e.event_date),
+        points: e.points,
+        counted: counted.has(e.event_id),
+        result: resultOf(e),
+      })),
+    };
+  });
+
+  const top5 = standings.slice(0, 5);
+  const race = pointsRace(Object.fromEntries(top5.map((t) => [t.driver_id, evBy[t.driver_id] || []])), rule, mode,
+    Object.fromEntries(top5.map((t) => [t.driver_id, scope.division])));
+  const lines = top5.map((t) => ({ id: t.driver_id, name: name(t.driver_id), values: race.series[t.driver_id] || [] }));
+
+  // Events panel: nationals (national view) or that division's events (division view).
+  const panelEvents = {};
+  for (const e of evRows) {
+    if (mode === 'national' ? e.kind !== 'nat' : e.kind !== 'div' || e.division !== scope.division) continue;
+    const p = (panelEvents[e.event_id] ||= { id: e.event_id, date: e.event_date, label: label(e), field: e.field_n, win: null, ru: null });
+    if (e.is_win) p.win = e.driver_id;
+    if (e.is_ru) p.ru = e.driver_id;
+  }
+  const panel = Object.values(panelEvents).sort((a, b) => a.date.localeCompare(b.date));
+  const panelNames = indexBy(await byIds('driver', 'id', panel.flatMap((p) => [p.win, p.ru]), 'id,display_name'));
+
+  const lead = standings[0];
+  const second = standings[1];
+  const seasonOptions = seasons.map((s) => ({
+    season: s,
+    label: s === thisYear ? `${s} (live)` : String(s),
+    href: scopeHref(cat.slug, scope.division, s, latest),
   }));
 
-  const leader = standings[0]?.total || 0;
-  const title = mode === 'division' ? `Division ${scope.division}` : 'National';
-  const counting =
-    mode === 'division'
-      ? `Best ${rule.division_best} of the first ${rule.division_first} divisional events, up to ${rule.division_max_out} from outside the home division.`
-      : rule.category_slug.startsWith('top-alcohol')
-        ? `Best ${rule.div_best} of the first ${rule.div_first} regional events plus best ${rule.nat_best} of the first ${rule.nat_first} national events.`
-        : `Best ${rule.div_best} of the first ${rule.div_first} divisional events plus best ${rule.nat_best} of the first ${rule.nat_first} national events.`;
-
   return (
-    <div className="stack">
-      <header>
-        <Link href="/points" className="small">← Points</Link>
-        <h1 style={{ marginTop: 6 }}>{cat.name} · {title}</h1>
-        <p className="muted" style={{ margin: '8px 0 0' }}>{season} Lucas Oil points. {counting}</p>
-      </header>
+    <div className="stack" style={{ gap: 18 }}>
+      <div className="season-bar">
+        <div className="left">
+          <h1 className="ptitle" style={{ fontSize: 24 }}>{season} {cat.name} · {where}</h1>
+          <span className={live ? 'badge' : 'badge final'}>{live ? 'Season in progress' : 'Final'}</span>
+        </div>
+        {seasons.length > 0 && <SeasonSelect options={seasonOptions} current={season} />}
+      </div>
+      {tabs}
 
-      <nav className="tabs" aria-label="Standings">
-        {rule.has_national && (
-          <Link href={scopeHref(cat.slug, null, season, latest)} aria-current={mode === 'national' ? 'page' : undefined}>National</Link>
-        )}
-        {rule.has_division && DIVISIONS.map((d) => (
-          <Link key={d} href={scopeHref(cat.slug, d, season, latest)} aria-current={scope.division === d ? 'page' : undefined}>Div. {d}</Link>
-        ))}
-      </nav>
-      {seasons.length > 1 && (
-        <nav className="tabs" aria-label="Season">
-          {seasons.map((s) => (
-            <Link key={s} href={scopeHref(cat.slug, scope.division, s, latest)} aria-current={s === season ? 'page' : undefined}>{s}</Link>
-          ))}
-        </nav>
-      )}
-
-      {!standings.length ? (
-        <div className="panel"><div className="empty">No points yet for {cat.name} {title.toLowerCase()} in {season || 'this season'}.</div></div>
+      {!lead ? (
+        <div className="card">No points yet for {cat.name} {where.toLowerCase()}{season ? ` in ${season}` : ''}.</div>
       ) : (
         <>
-          <section className="panel">
-            <div className="panel-head">
-              <h3>Points race · top {lines.length}</h3>
-              <span className="small muted">Counted points after each race</span>
+          <div className="hero-row">
+            <section className="leader-card">
+              <span className="badge">{season} {mode === 'division' ? `Div. ${scope.division} ` : ''}points leader</span>
+              <h2 className="who"><Link href={`/drivers/${lead.driver_id}`}>{name(lead.driver_id)}</Link></h2>
+              <div className="line">
+                {mode === 'national'
+                  ? `${lead.total} points · ${lead.div_pts ?? 0} divisional + ${lead.nat_pts ?? 0} national · ${lead.wins} ${lead.wins === 1 ? 'win' : 'wins'}`
+                  : `${lead.total} points · ${lead.events_counted} events counted · ${lead.wins} ${lead.wins === 1 ? 'win' : 'wins'}`}
+              </div>
+            </section>
+            <div className="stat-cards">
+              <div className="stat-card">
+                <span className="k">Runner-up</span>
+                {second ? (
+                  <>
+                    <Link href={`/drivers/${second.driver_id}`} className="name" style={{ textDecoration: 'none' }}>{name(second.driver_id)}</Link>
+                    <span className="sub">{second.total} pts</span>
+                  </>
+                ) : <span className="sub">—</span>}
+              </div>
+              <div className="stat-card">
+                <span className="k">Margin</span>
+                <span className="v red">{second ? lead.total - second.total : '—'}</span>
+              </div>
+              <div className="stat-card">
+                <span className="k">{mode === 'national' ? 'Nationals' : 'Div. events'}</span>
+                <span className="v">{panel.length}</span>
+              </div>
+              <div className="stat-card">
+                <span className="k">Drivers ranked</span>
+                <span className="v">{standings.length}</span>
+              </div>
             </div>
-            <div className="panel-body"><PointsChart dates={race.dates} lines={lines} /></div>
+          </div>
+
+          <section className="card">
+            <h2 className="ptitle">Points race</h2>
+            <p className="psub">Each contender's score as the season went on, using the same rules as the final total.</p>
+            <div style={{ marginTop: 12 }}><PointsChart dates={race.dates} lines={lines} /></div>
           </section>
 
-          <section className="panel">
-            <div className="panel-head">
-              <h3>Standings</h3>
-              <span className="small muted">{standings.length} racers</span>
-            </div>
-            <div className="table-wrap">
-              <table className="slip">
-                <thead>
-                  <tr>
-                    <th scope="col">#</th>
-                    <th scope="col" style={{ textAlign: 'left' }}>Racer</th>
-                    <th scope="col">Points</th>
-                    <th scope="col" title="Behind the leader">Gap</th>
-                    <th scope="col" title="Behind the racer one spot ahead">To next</th>
-                    {mode === 'national' ? (
-                      <>
-                        <th scope="col">Div.</th>
-                        <th scope="col">Nat.</th>
-                        <th scope="col" title="National events / divisional events entered">N/D</th>
-                      </>
-                    ) : (
-                      <>
-                        <th scope="col" title="Events counted">Counted</th>
-                        <th scope="col" title="Counted events from outside the home division">Out</th>
-                      </>
-                    )}
-                    <th scope="col">Wins</th>
-                    <th scope="col" title="The score a new result has to beat to raise this total">Must beat</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.map((s, i) => {
-                    const next = i > 0 ? standings[i - 1].total - s.total : 0;
-                    const mb = evBy[s.driver_id] ? mustBeat(evBy[s.driver_id], rule, mode, scope.division) : null;
-                    return (
-                      <tr key={s.driver_id}>
-                        <td className="flat">{s.rank}</td>
-                        <td style={{ textAlign: 'left' }}>
-                          <Link href={`/drivers/${s.driver_id}`}>{names[s.driver_id]?.display_name || 'Unknown racer'}</Link>
-                        </td>
-                        <td className="headline">{s.total}</td>
-                        <td className="flat">{gap(leader - s.total)}</td>
-                        <td className="flat">{i ? gap(next) : '—'}</td>
-                        {mode === 'national' ? (
-                          <>
-                            <td>{s.div_pts ?? 0}</td>
-                            <td>{s.nat_pts ?? 0}</td>
-                            <td className="flat">{s.nat_events}/{s.div_events}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td>{s.events_counted}</td>
-                            <td className="flat">{s.out_counted || '—'}</td>
-                          </>
-                        )}
-                        <td>{s.wins || '—'}</td>
-                        <td className="flat">
-                          {!mb ? '' : mb.closed ? 'Done' : mb.open ? `${mb.open} open` : `${mb.beat}+`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <h3>How the leaders got there</h3>
-              <span className="small muted">Bold = counted · grey = dropped or not eligible</span>
-            </div>
-            <div className="table-wrap">
-              <table className="slip">
-                <thead>
-                  <tr><th scope="col" style={{ textAlign: 'left' }}>Racer</th><th scope="col" style={{ textAlign: 'left' }}>Races (points)</th></tr>
-                </thead>
-                <tbody>
-                  {top.map((t) => {
-                    const counted = new Set(t.counted_events || []);
-                    return (
-                      <tr key={t.driver_id}>
-                        <td><Link href={`/drivers/${t.driver_id}`}>{names[t.driver_id]?.display_name}</Link></td>
-                        <td style={{ textAlign: 'left', whiteSpace: 'normal' }}>
-                          {(evBy[t.driver_id] || [])
-                            .filter((e) => mode === 'national' || e.kind === 'div')
-                            .map((e, k) => (
-                              <span key={e.event_id} title={`${e.event_name} · ${date(e.event_date)}`} style={{ marginRight: 12, display: 'inline-block', color: counted.has(e.event_id) ? 'var(--ink)' : '#9aa3b2', fontWeight: counted.has(e.event_id) ? 700 : 400 }}>
-                                <Link href={`/events/${e.event_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                                  {e.kind === 'nat' ? 'Nat' : `D${e.division}`} {date(e.event_date).replace(/, \d{4}$/, '')}
-                                </Link>{' '}
-                                {e.points}{e.is_win ? ' W' : e.is_ru ? ' RU' : ''}
-                              </span>
-                            ))}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <div className="two-col">
+            <section className="card">
+              <h2 className="ptitle">Standings</h2>
+              <p className="psub">Tap a driver for the events that counted.</p>
+              <StandingsTable rows={rows} mode={mode} />
+            </section>
+            <section className="card">
+              <h2 className="ptitle">{mode === 'national' ? 'National events' : `Division ${scope.division} events`}</h2>
+              <p className="psub">Open an event for its full results and every round.</p>
+              {panel.length ? (
+                <div className="table-wrap" style={{ marginTop: 14 }}>
+                  <table className="slip events-table">
+                    <thead>
+                      <tr><th scope="col">Event</th><th scope="col">Field</th><th scope="col" style={{ textAlign: 'left' }}>Winner</th></tr>
+                    </thead>
+                    <tbody>
+                      {panel.map((p) => (
+                        <tr key={p.id}>
+                          <td>
+                            <Link href={`/events/${p.id}`} className="ev-title">{p.label}</Link>
+                            <div className="def">{monYear(p.date)}</div>
+                          </td>
+                          <td>{p.field || '—'}</td>
+                          <td style={{ textAlign: 'left' }}>
+                            {p.win ? <Link href={`/drivers/${p.win}`} className="win">{panelNames[p.win]?.display_name}</Link> : <span className="flat">—</span>}
+                            {p.ru && <div className="def">def. {panelNames[p.ru]?.display_name}</div>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="psub" style={{ marginTop: 14 }}>No events loaded yet.</p>
+              )}
+            </section>
+          </div>
         </>
       )}
 
-      <p className="small muted" style={{ maxWidth: '70ch' }}>
+      <p className="small muted" style={{ maxWidth: '72ch' }}>
         Scored with{' '}
-        <a href="https://www.nhra.com/how-points-are-earned/lucas-oil-national-championship-points">NHRA's Lucas Oil points rules</a>.
+        <a href="https://www.nhra.com/how-points-are-earned/lucas-oil-national-championship-points">NHRA's Lucas Oil points rules</a>
+        {mode === 'division' ? '. Home division is the division of a racer’s first divisional event of the season' : ''}.
         Points waivers aren't in public results, so totals can differ slightly from NHRA's official standings.
       </p>
+    </div>
+  );
+}
+
+// ---------- Records ----------
+function top10(map, sortFn) {
+  return Object.entries(map).sort(sortFn).slice(0, 10);
+}
+
+async function Records({ cat, mode, scope, table, divFilter, latest, thisYear, tabs, where }) {
+  const st = await all(`${table}?select=season,driver_id,total,rank&category_id=eq.${cat.id}${divFilter}&rank=lte.5&order=season,rank`, { maxRows: 5000 });
+  const winsRows = await all(
+    `pts_event?select=driver_id,season,event_id,event_name,field_n,division&category_id=eq.${cat.id}&is_win=is.true&kind=eq.${mode === 'national' ? 'nat' : 'div'}${mode === 'division' ? `&division=eq.${scope.division}` : ''}`,
+    { maxRows: 5000 },
+  );
+  const meta = indexBy(await byIds('event', 'id', winsRows.map((w) => w.event_id), 'id,venue_id'));
+  const venues = indexBy(await byIds('venue', 'id', Object.values(meta).map((m) => m.venue_id), 'id,name,city'));
+  const names = indexBy(await byIds('driver', 'id', [...st.map((r) => r.driver_id), ...winsRows.map((w) => w.driver_id)], 'id,display_name'));
+  const nm = (id) => names[id]?.display_name || 'Unknown';
+  const link = (id) => <Link href={`/drivers/${id}`}>{nm(id)}</Link>;
+
+  const bySeason = {};
+  for (const r of st) (bySeason[r.season] ||= []).push(r);
+  const seasons = Object.keys(bySeason).map(Number).sort((a, b) => a - b);
+  const champs = seasons.map((s) => ({ season: s, c: bySeason[s].find((r) => r.rank === 1), ru: bySeason[s].find((r) => r.rank === 2) })).filter((x) => x.c);
+  const done = champs.filter((x) => x.season !== thisYear && x.ru);
+
+  const titles = {};
+  for (const x of champs) (titles[x.c.driver_id] ||= []).push(x.season);
+  const top5 = {};
+  for (const r of st) top5[r.driver_id] = (top5[r.driver_id] || 0) + 1;
+  const natWins = {};
+  for (const w of winsRows) natWins[w.driver_id] = (natWins[w.driver_id] || 0) + 1;
+  const b2b = [];
+  for (let i = 1; i < champs.length; i++) {
+    if (champs[i].season === champs[i - 1].season + 1 && champs[i].c.driver_id === champs[i - 1].c.driver_id) {
+      b2b.push({ id: champs[i].c.driver_id, from: champs[i - 1].season, to: champs[i].season });
+    }
+  }
+  const fields = [...winsRows].sort((a, b) => (b.field_n || 0) - (a.field_n || 0)).slice(0, 10);
+  const winLabel = mode === 'national' ? 'national' : 'divisional';
+  const first = seasons[0];
+
+  const cards = [
+    {
+      title: 'Most titles',
+      items: top10(titles, (a, b) => b[1].length - a[1].length || a[1][0] - b[1][0]).map(([id, yrs]) => (
+        <>{link(id)} <b className="red">{yrs.length}</b> <span className="yr">({yrs.join(', ')})</span></>
+      )),
+    },
+    { title: 'Most top-5 seasons', items: top10(top5, (a, b) => b[1] - a[1]).map(([id, n]) => <>{link(id)} <b>{n}</b></>) },
+    { title: `Most ${winLabel} wins`, items: top10(natWins, (a, b) => b[1] - a[1]).map(([id, n]) => <>{link(id)} <b>{n}</b></>) },
+    {
+      title: 'Highest winning totals',
+      items: [...champs].sort((a, b) => b.c.total - a.c.total).slice(0, 10).map((x) => <>{link(x.c.driver_id)} <b>{x.c.total}</b> <span className="yr">{x.season}</span></>),
+    },
+    {
+      title: 'Biggest winning margins',
+      items: [...done].sort((a, b) => (b.c.total - b.ru.total) - (a.c.total - a.ru.total)).slice(0, 5)
+        .map((x) => <><span className="yr">{x.season}</span> {link(x.c.driver_id)} <b className="red">+{x.c.total - x.ru.total}</b></>),
+    },
+    {
+      title: 'Closest title races',
+      items: [...done].sort((a, b) => (a.c.total - a.ru.total) - (b.c.total - b.ru.total)).slice(0, 5)
+        .map((x) => <><span className="yr">{x.season}</span> {link(x.c.driver_id)} <b className="red">+{x.c.total - x.ru.total}</b> <span className="yr">over {nm(x.ru.driver_id)}</span></>),
+    },
+    {
+      title: `Biggest ${winLabel} fields`,
+      items: fields.map((w) => {
+        const v = venues[meta[w.event_id]?.venue_id];
+        const where = mode === 'national' ? v?.city || w.event_name : v?.name || `Div ${w.division}`;
+        return <><span className="yr">{w.season}</span> {where} <b>{w.field_n}</b> <span className="yr">won by</span> {link(w.driver_id)}</>;
+      }),
+    },
+    {
+      title: 'Back-to-back champions',
+      items: b2b.length ? b2b.map((x) => <><span className="yr">{x.from}–{x.to}</span> {link(x.id)}</>) : [<span className="yr">None yet</span>],
+    },
+  ];
+
+  return (
+    <div className="stack" style={{ gap: 18 }}>
+      <div className="season-bar">
+        <h1 className="ptitle" style={{ fontSize: 24 }}>{cat.name} · {where} records</h1>
+      </div>
+      {tabs}
+      <section className="card">
+        <h2 className="ptitle">Records</h2>
+        <p className="psub">{first ? `${first} to today.` : ''} Seasons still in progress are left out of margin records.</p>
+        <div className="records-grid" style={{ marginTop: 16 }}>
+          {cards.map((c) => (
+            <div className="record-card" key={c.title}>
+              <h3>{c.title}</h3>
+              {c.items.length ? <ol>{c.items.map((it, i) => <li key={i}>{it}</li>)}</ol> : <p className="psub">Not enough seasons yet.</p>}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
