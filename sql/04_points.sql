@@ -114,8 +114,19 @@ with elim as (
   where p.round_type = 'E'
   group by p.race_id, r.entry_id
 ),
-field as (  -- NHRA scores by ladder size: a 7-round ladder is the 65-128 car row, and so on
-  select race_id, count(*) as field_n, max(last_round) as rounds_n from elim group by race_id
+field as (  -- NHRA scores by ladder size: the larger of 2^rounds and the next power of two above the cars in eliminations
+  select race_id, count(*) as field_n, max(last_round) as rounds_n,
+         greatest(power(2, max(last_round)), power(2, ceil(log(2, greatest(count(*), 2)::numeric))))::int as ladder_n
+  from elim group by race_id
+),
+qual as (  -- qualifying position from best qualifying ET when the source didn't record it (Top Alcohol bonus points)
+  select en.id as entry_id,
+         rank() over (partition by en.race_id order by min(r.et)) as qpos
+  from dt.entry en
+  join dt.run r on r.entry_id = en.id
+  join dt.pairing p on p.id = r.pairing_id and p.round_type in ('Q', 'T')
+  where r.et > 0 and coalesce(r.red_light, false) = false
+  group by en.id, en.race_id
 ),
 base as (
   select
@@ -125,9 +136,9 @@ base as (
          when s.code like 'lodrs-d%' then 'div' end) as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
     coalesce(nullif(ra.field_size, 0), f.field_n, 0) as field_n,   -- cars entered (shown on the site)
-    coalesce((2 ^ least(f.rounds_n, 10))::int, nullif(ra.field_size, 0), f.field_n, 0) as ladder_n,  -- used for points
+    coalesce(f.ladder_n, nullif(ra.field_size, 0), f.field_n, 0) as ladder_n,  -- used for points
     e.last_round, coalesce(en.is_winner, false) as is_win, coalesce(en.is_runner_up, false) as is_ru,
-    en.qual_pos
+    coalesce(en.qual_pos, q.qpos) as qual_pos
   from dt.entry en
   join dt.race ra     on ra.id = en.race_id
   join dt.event ev    on ev.id = ra.event_id
@@ -135,6 +146,7 @@ base as (
   join dt.category c  on c.id = ra.category_id
   left join elim e    on e.race_id = ra.id and e.entry_id = en.id
   left join field f   on f.race_id = ra.id
+  left join qual q    on q.entry_id = en.id
   left join dt.points_event_override o on o.event_id = ev.id
   where en.driver_id is not null
     and c.slug in (select category_slug from dt.points_rule)
