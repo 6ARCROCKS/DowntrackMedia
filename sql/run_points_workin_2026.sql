@@ -1,6 +1,6 @@
 -- Downtrack Media: 2026 work-in points for two divisionals NHRA scored but never published results for.
 -- Source: NHRA national standings points-detail sheets (event codes 21-Orlando and 46-Dallas).
--- 695 racer results, 15 racers new to the database. Safe to re-run.
+-- 686 racer results, 15 racers new to the database. Safe to re-run.
 
 set statement_timeout = '0';
 
@@ -15,6 +15,9 @@ create table if not exists dt.points_manual (
   source      text,
   primary key (driver_id, category_id, event_id)
 );
+
+-- Start clean so a re-run replaces earlier work-in rows (waived events are left out: NHRA type WvEv)
+delete from dt.points_manual where season = 2026 and source like 'NHRA points sheet%';
 
 -- Orlando Speed World, Div 2 (NHRA's results pages for Feb 27-28 say "No Results")
 insert into dt.event (series_id, source_id, source_key, season, name, start_date, end_date, dates_raw, source_url)
@@ -53,7 +56,6 @@ insert into wi values
 ('21',12,1059,null,42,false,false),
 ('46',12,58,null,52,false,false),
 ('21',12,110,null,31,false,false),
-('46',12,110,null,30,false,false),
 ('21',12,101,null,64,false,true),
 ('21',12,104,null,31,false,false),
 ('46',12,4796,null,30,false,false),
@@ -87,7 +89,6 @@ insert into wi values
 ('21',13,112,null,40,false,false),
 ('46',13,157,null,61,false,false),
 ('21',13,107,null,51,false,false),
-('46',13,107,null,30,false,false),
 ('46',13,3136,null,40,false,false),
 ('21',13,127,null,30,false,false),
 ('46',13,1273,null,72,false,false),
@@ -186,9 +187,7 @@ insert into wi values
 ('46',13,414,null,30,false,false),
 ('21',14,158,null,51,false,false),
 ('46',14,780,null,30,false,false),
-('46',14,461,null,40,false,false),
 ('46',14,176,null,83,false,false),
-('46',14,455,null,72,false,false),
 ('21',14,1291,null,51,false,false),
 ('46',14,449,null,105,true,false),
 ('21',14,187,null,62,false,false),
@@ -443,7 +442,6 @@ insert into wi values
 ('21',15,null,'Andrew Sheppard II',10,false,false),
 ('46',16,4105,null,61,false,false),
 ('21',16,323,null,40,false,false),
-('46',16,323,null,30,false,false),
 ('46',16,944,null,30,false,false),
 ('21',16,253,null,51,false,false),
 ('21',16,307,null,40,false,false),
@@ -581,7 +579,6 @@ insert into wi values
 ('46',18,547,null,41,false,false),
 ('46',18,2553,null,30,false,false),
 ('46',18,1966,null,41,false,false),
-('46',18,1605,null,30,false,false),
 ('46',18,265,null,30,false,false),
 ('46',18,355,null,30,false,false),
 ('46',18,360,null,63,false,false),
@@ -638,10 +635,8 @@ insert into wi values
 ('46',19,2500,null,30,false,false),
 ('46',19,2499,null,52,false,false),
 ('21',19,378,null,63,false,false),
-('46',19,378,null,30,false,false),
 ('46',19,1616,null,41,false,false),
 ('46',19,391,null,30,false,false),
-('46',19,1620,null,30,false,false),
 ('46',19,1342,null,63,false,false),
 ('46',19,1036,null,30,false,false),
 ('21',19,370,null,52,false,false),
@@ -651,7 +646,6 @@ insert into wi values
 ('46',19,1966,null,30,false,false),
 ('21',19,383,null,52,false,false),
 ('46',19,383,null,30,false,false),
-('21',19,396,null,30,false,false),
 ('21',19,159,null,41,false,false),
 ('46',19,159,null,30,false,false),
 ('46',19,1980,null,41,false,false),

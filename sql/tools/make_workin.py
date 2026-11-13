@@ -59,6 +59,9 @@ create table if not exists dt.points_manual (
   primary key (driver_id, category_id, event_id)
 );
 
+-- Start clean so a re-run replaces earlier work-in rows (waived events are left out: NHRA type WvEv)
+delete from dt.points_manual where season = 2026 and source like 'NHRA points sheet%';
+
 -- Orlando Speed World, Div 2 (NHRA's results pages for Feb 27-28 say "No Results")
 insert into dt.event (series_id, source_id, source_key, season, name, start_date, end_date, dates_raw, source_url)
 select s.id, 1, '2026/d2/20260227', 2026, 'Lucas Oil Division 2 — Feb 27, 2026', date '2026-02-27', date '2026-02-28',
