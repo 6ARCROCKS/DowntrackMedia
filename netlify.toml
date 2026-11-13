@@ -4,3 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
+# Netlify's Next.js runtime: serves the server-rendered pages.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
