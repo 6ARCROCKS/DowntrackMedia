@@ -98,8 +98,8 @@ with elim as (
   where p.round_type = 'E'
   group by p.race_id, r.entry_id
 ),
-field as (
-  select race_id, count(*) as field_n from elim group by race_id
+field as (  -- NHRA scores by ladder size: a 7-round ladder is the 65-128 car row, and so on
+  select race_id, count(*) as field_n, max(last_round) as rounds_n from elim group by race_id
 ),
 base as (
   select
@@ -108,7 +108,8 @@ base as (
     coalesce(o.kind, case when s.code = 'nhra-national' then 'nat'
          when s.code like 'lodrs-d%' then 'div' end) as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
-    coalesce(nullif(ra.field_size, 0), f.field_n, 0) as field_n,   -- NHRA scores by cars entered, not cars in eliminations
+    coalesce(nullif(ra.field_size, 0), f.field_n, 0) as field_n,   -- cars entered (shown on the site)
+    coalesce((2 ^ least(f.rounds_n, 10))::int, nullif(ra.field_size, 0), f.field_n, 0) as ladder_n,  -- used for points
     e.last_round, coalesce(en.is_winner, false) as is_win, coalesce(en.is_runner_up, false) as is_ru,
     en.qual_pos
   from dt.entry en
@@ -127,7 +128,7 @@ scored as (
   select b.*,
     case
       when b.last_round is null and not b.is_win then 10   -- non-qualifier / no-show
-      else dt.lodrs_points(b.slug, b.field_n::int, b.last_round::int, b.is_win, b.is_ru)
+      else dt.lodrs_points(b.slug, b.ladder_n::int, b.last_round::int, b.is_win, b.is_ru)
     end
     + case when b.slug like 'top-alcohol-%' then 10 + dt.ta_qual_points(b.qual_pos::int) else 0 end as points
   from base b
