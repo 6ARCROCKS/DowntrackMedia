@@ -45,7 +45,11 @@ create table if not exists dt.points_event_override (
   note     text
 );
 insert into dt.points_event_override (event_id, kind, note) values
-  (300, 'nat', '2026 Bowling Green (BK1): run with Div 3, NHRA scores it as a national event')
+  -- 2026 SPORTSnationals: divisional race first, SPORTSnationals second on the same weekend
+  (307, 'nat', '2026 Cajun SPORTSnationals, No Problem Raceway, Belle Rose (Mar 27-29)'),
+  (324, 'nat', '2026 Canadian SPORTSnationals, Mission Raceway Park (Jun 11-12)'),
+  (284, 'nat', '2026 Testo Chesapeake SPORTSnationals, Cecil County Dragway (moved to Aug)'),
+  (300, 'nat', '2026 JEGS SPORTSnationals, Beech Bend, Bowling Green (BK1, moved to Aug 26-30)')
 on conflict (event_id) do update set kind = excluded.kind, note = excluded.note;
 
 -- 2. Points for a finish (NHRA table). lost_round = elimination round lost in (1 = first round).
