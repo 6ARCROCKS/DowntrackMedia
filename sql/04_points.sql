@@ -108,7 +108,7 @@ base as (
     coalesce(o.kind, case when s.code = 'nhra-national' then 'nat'
          when s.code like 'lodrs-d%' then 'div' end) as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
-    coalesce(f.field_n, ra.field_size, 0) as field_n,
+    coalesce(nullif(ra.field_size, 0), f.field_n, 0) as field_n,   -- NHRA scores by cars entered, not cars in eliminations
     e.last_round, coalesce(en.is_winner, false) as is_win, coalesce(en.is_runner_up, false) as is_ru,
     en.qual_pos
   from dt.entry en
@@ -189,15 +189,25 @@ left join att a using (season, category_id, driver_id);
 
 create unique index pts_national_pk on dt.pts_national (season, category_id, driver_id);
 
--- 5. Divisional standings: home division = division of the driver's first divisional event that season.
+-- 5. Divisional standings: home division = the division raced most that season (NHRA uses the declared home division).
 --    First 8 divisional events eligible; best 5 count, at most 2 from outside the home division.
 create materialized view dt.pts_division as
-with d as (
+with home as (  -- home division: the one raced most that season (ties: the one raced first)
+  select distinct on (driver_id, category_id, season) driver_id, category_id, season, division as home_div
+  from (
+    select driver_id, category_id, season, division, count(*) as n, min(event_date) as first_date
+    from dt.pts_event where kind = 'div' and division is not null
+    group by driver_id, category_id, season, division
+  ) x
+  order by driver_id, category_id, season, n desc, first_date
+),
+d as (
   select pe.*, pr.division_first, pr.division_best, pr.division_max_out,
-    row_number() over (partition by driver_id, category_id, season order by event_date, event_id) as nth,
-    first_value(division) over (partition by driver_id, category_id, season order by event_date, event_id) as home_div
+    row_number() over (partition by pe.driver_id, pe.category_id, pe.season order by pe.event_date, pe.event_id) as nth,
+    h.home_div
   from dt.pts_event pe
   join dt.points_rule pr on pr.category_slug = pe.slug and pe.season between pr.season_from and pr.season_to
+  join home h on h.driver_id = pe.driver_id and h.category_id = pe.category_id and h.season = pe.season
   where pe.kind = 'div' and pr.has_division
 ),
 elig as (
@@ -256,10 +266,10 @@ revoke execute on function dt.refresh_stats() from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
 
--- 8. Check: 2026 Stock national top 5 (NHRA shows Jeff Adkinson 655)
-select n.rank, d.display_name, n.total, n.nat_events || '/' || n.div_events as "N/D"
+-- 8. Check vs NHRA 2026 Stock: Adkinson 655, Hidalgo Jr 644, Santangelo 633, Brand 623, Oakes 600, Theobald 581, Strickland 567
+select n.rank, d.display_name, n.total, n.div_pts, n.nat_pts
 from dt.pts_national n
 join dt.driver d on d.id = n.driver_id
 join dt.category c on c.id = n.category_id
 where n.season = 2026 and c.slug = 'stock-eliminator'
-order by n.rank limit 5;
+order by n.rank limit 10;
