@@ -14,6 +14,26 @@ rows = list(csv.reader(io.StringIO(src.replace(';', '\n'))))
 def q(s):
     return "'" + s.replace("'", "''") + "'"
 
+# One row per racer per class per race (keep the higher score if a name mapped twice),
+# then winner = the single top score, runner-up = the single second score.
+best = {}
+for code, cat, who, pts, _w, _ru in rows:
+    k = (code, cat, who)
+    if k not in best or int(pts) > int(best[k][3]):
+        best[k] = [code, cat, who, pts, '0', '0']
+rows = list(best.values())
+from collections import defaultdict
+groups = defaultdict(list)
+for r in rows:
+    groups[(r[0], r[1])].append(r)
+for g in groups.values():
+    scores = sorted({int(r[3]) for r in g}, reverse=True)
+    for i, flag in ((0, 4), (1, 5)):
+        if len(scores) > i:
+            top = [r for r in g if int(r[3]) == scores[i]]
+            if len(top) == 1:
+                top[0][flag] = '1'
+
 new_names = sorted({r[2] for r in rows if not r[2].strip().isdigit()})
 vals = []
 for code, cat, who, pts, w, ru in rows:
