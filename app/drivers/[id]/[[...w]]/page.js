@@ -72,6 +72,14 @@ export default async function DriverPage({ params }) {
 
   const classesRun = [...new Set(rows.map((r) => r.cat?.name).filter(Boolean))];
 
+  // Points: this racer's national and divisional standing in the latest season with points.
+  const [natPts, divPts] = await Promise.all([
+    db(`pts_national?select=season,category_id,total,rank,wins&driver_id=eq.${driver.id}&order=season.desc&limit=20`),
+    db(`pts_division?select=season,category_id,division,total,rank&driver_id=eq.${driver.id}&order=season.desc&limit=20`),
+  ]);
+  const ptsSeason = Math.max(0, ...natPts.map((r) => r.season), ...divPts.map((r) => r.season)) || null;
+  const ptsCats = [...new Set([...natPts, ...divPts].filter((r) => r.season === ptsSeason).map((r) => r.category_id))];
+
   return (
     <div className="stack">
       <header>
@@ -87,6 +95,33 @@ export default async function DriverPage({ params }) {
           {driver.downtrack_no && <div><b>#{driver.downtrack_no}</b><span>Downtrack no.</span></div>}
         </div>
       </header>
+
+      {ptsSeason && ptsCats.length > 0 && (
+        <section className="panel">
+          <div className="panel-head"><h3>{ptsSeason} points</h3><Link href="/points" className="small">All standings →</Link></div>
+          <div className="table-wrap">
+            <table className="slip">
+              <thead>
+                <tr><th scope="col">Class</th><th scope="col">National</th><th scope="col">Divisional</th></tr>
+              </thead>
+              <tbody>
+                {ptsCats.map((cid) => {
+                  const n = natPts.find((r) => r.season === ptsSeason && r.category_id === cid);
+                  const d = divPts.find((r) => r.season === ptsSeason && r.category_id === cid);
+                  const slug = catBy[cid]?.slug;
+                  return (
+                    <tr key={cid}>
+                      <td>{catBy[cid]?.name}</td>
+                      <td>{n ? <Link href={`/points/${slug}`}><b>#{n.rank}</b> · {n.total} pts</Link> : <span className="flat">—</span>}</td>
+                      <td>{d ? <Link href={`/points/${slug}/division-${d.division}`}><b>#{d.rank}</b> in Div. {d.division} · {d.total} pts</Link> : <span className="flat">—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <WindowTabs basePath={`/drivers/${driver.id}`} current={win.key} />
 

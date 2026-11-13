@@ -31,6 +31,7 @@ export default function RootLayout({ children }) {
             </Link>
             <nav className="nav" aria-label="Main">
               <Link href="/events">Results</Link>
+              <Link href="/points">Points</Link>
               <Link href="/classes">Classes</Link>
               <Link href="/drivers">Racers</Link>
             </nav>
