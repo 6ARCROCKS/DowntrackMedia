@@ -31,7 +31,7 @@ export default async function PointsPage({ params }) {
   if (!scope) notFound();
   const [cat, rule] = await Promise.all([
     one(`category?select=id,slug,name&slug=eq.${encodeURIComponent(params.slug)}`),
-    one(`points_rule?select=*&category_slug=eq.${encodeURIComponent(params.slug)}&order=season_from.desc`),
+    one(`points_rule?select=*&category_slug=eq.${encodeURIComponent(params.slug)}&order=season_from.desc&limit=5`),
   ]);
   if (!cat || !rule) notFound();
 

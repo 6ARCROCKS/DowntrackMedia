@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function PointsIndex() {
   const [rules, cats] = await Promise.all([
-    db('points_rule?select=category_slug,has_national,has_division'),
+    db('points_rule?select=category_slug,has_national,has_division&order=category_slug'),
     db('category?select=id,slug,name&order=id').then((r) => indexBy(r, 'slug')),
   ]);
   const order = Object.keys(cats);
