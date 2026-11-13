@@ -5,6 +5,10 @@ import { dragNum } from '@/lib/metrics';
 import { dateRange } from '@/lib/format';
 
 export const revalidate = 3600;
+export const dynamicParams = true;
+export async function generateStaticParams() {
+  return [];
+}
 
 const validId = (v) => /^\d+$/.test(String(v));
 

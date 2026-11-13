@@ -1,12 +1,16 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { db, one, byIds, indexBy } from '@/lib/db';
-import { windowFor } from '@/lib/metrics';
+import { windowFromPath, windowHref } from '@/lib/metrics';
 import { dateRange, resultLabel } from '@/lib/format';
 import StatTable from '@/components/StatTable';
 import WindowTabs from '@/components/WindowTabs';
 
 export const revalidate = 3600;
+export const dynamicParams = true;
+export async function generateStaticParams() {
+  return [];
+}
 
 const validId = (v) => /^\d+$/.test(String(v));
 
@@ -16,13 +20,14 @@ export async function generateMetadata({ params }) {
   return d ? { title: d.display_name, description: `${d.display_name}: results, reaction times, increments and dial-in stats.` } : {};
 }
 
-export default async function DriverPage({ params, searchParams }) {
+export default async function DriverPage({ params }) {
   if (!validId(params.id)) notFound();
   const driver = await one(`driver?select=*&id=eq.${params.id}`);
   if (!driver) notFound();
   if (driver.merged_into) redirect(`/drivers/${driver.merged_into}`);
 
-  const win = windowFor(searchParams?.w);
+  const win = windowFromPath(params.w);
+  if (!win) notFound();
 
   const [entries, statRows, cats] = await Promise.all([
     db(`entry?select=id,race_id,car_no,class_code,finish_round,is_winner,is_runner_up&driver_id=eq.${driver.id}&limit=1000`),
@@ -90,7 +95,7 @@ export default async function DriverPage({ params, searchParams }) {
           <section className="panel" key={cid}>
             <div className="panel-head">
               <h3>{catBy[cid]?.name} · {win.label}</h3>
-              <Link href={`/classes/${catBy[cid]?.slug}?w=${win.key}`} className="small">Class stats →</Link>
+              <Link href={windowHref(`/classes/${catBy[cid]?.slug}`, win.key)} className="small">Class stats →</Link>
             </div>
             <StatTable
               rows={statRows.filter((r) => r.category_id === cid)}

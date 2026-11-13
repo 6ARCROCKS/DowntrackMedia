@@ -4,6 +4,10 @@ import { db, one, byIds, indexBy } from '@/lib/db';
 import { dateRange, placeName } from '@/lib/format';
 
 export const revalidate = 3600;
+export const dynamicParams = true;
+export async function generateStaticParams() {
+  return [];
+}
 
 const validId = (v) => /^\d+$/.test(String(v));
 

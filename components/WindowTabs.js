@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { WINDOWS } from '@/lib/metrics';
+import { WINDOWS, windowHref } from '@/lib/metrics';
 
 // Time-window switcher. Links (not JS state) so every view has its own URL.
 export default function WindowTabs({ basePath, current, available }) {
@@ -9,7 +9,7 @@ export default function WindowTabs({ basePath, current, available }) {
       {shown.map((w) => (
         <Link
           key={w.key}
-          href={`${basePath}?w=${w.key}`}
+          href={windowHref(basePath, w.key)}
           aria-current={w.key === current ? 'page' : undefined}
           scroll={false}
         >

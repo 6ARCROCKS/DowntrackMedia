@@ -1,11 +1,18 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db, one, byIds, indexBy } from '@/lib/db';
-import { windowFor, isIndexClass, isDialInClass, fmt, KIND_LABEL } from '@/lib/metrics';
+import { windowFromPath, isIndexClass, isDialInClass, fmt, KIND_LABEL } from '@/lib/metrics';
 import StatTable from '@/components/StatTable';
 import WindowTabs from '@/components/WindowTabs';
 
 export const revalidate = 3600;
+export const dynamicParams = true;
+
+// Prebuild every class's default view at deploy time; other windows build on first visit and stay cached.
+export async function generateStaticParams() {
+  const cats = await db('category?select=slug,in_scope');
+  return cats.filter((c) => c.in_scope !== false).map((c) => ({ slug: c.slug, w: [] }));
+}
 
 export async function generateMetadata({ params }) {
   const cat = await one(`category?select=name&slug=eq.${encodeURIComponent(params.slug)}`);
@@ -20,11 +27,12 @@ async function leaders(catId, win, metric, { order, minRuns, filter = '', valueC
   );
 }
 
-export default async function ClassPage({ params, searchParams }) {
+export default async function ClassPage({ params }) {
   const cat = await one(`category?select=*&slug=eq.${encodeURIComponent(params.slug)}`);
   if (!cat) notFound();
 
-  const win = windowFor(searchParams?.w);
+  const win = windowFromPath(params.w);
+  if (!win) notFound();
   const [rows, windowsHave] = await Promise.all([
     db(`stat_category?select=*&category_id=eq.${cat.id}&time_window=eq.${win.key}`),
     db(`stat_category?select=time_window&category_id=eq.${cat.id}&metric=eq.et`),
@@ -33,7 +41,7 @@ export default async function ClassPage({ params, searchParams }) {
 
   const boards = [
     { title: 'Best on the tree', note: 'Median reaction time', metric: 'rt', order: 'asc' },
-    { title: 'Fewest red lights', note: 'Share of starts', metric: 'red_light', order: 'asc', valueCol: 'avg_val' },
+    { title: 'Fewest red lights', note: 'Share of starts, most starts first on ties', metric: 'red_light', order: 'asc', valueCol: 'avg_val', minMult: 2 },
   ];
   if (isDialInClass(cat)) {
     boards.push({ title: 'Tightest on the dial', note: 'Median over the dial', metric: 'dial_variance', order: 'asc', filter: '&median_val=gte.0' });
@@ -45,7 +53,7 @@ export default async function ClassPage({ params, searchParams }) {
   }
 
   const boardRows = await Promise.all(
-    boards.map((b) => leaders(cat.id, win.key, b.metric, { ...b, minRuns: win.minRuns })),
+    boards.map((b) => leaders(cat.id, win.key, b.metric, { ...b, minRuns: win.minRuns * (b.minMult || 1) })),
   );
   const drivers = indexBy(await byIds('driver', 'id', boardRows.flat().map((r) => r.driver_id), 'id,display_name'));
 
@@ -77,7 +85,7 @@ export default async function ClassPage({ params, searchParams }) {
       <section>
         <div className="section-head">
           <h2>Leaders · {win.label}</h2>
-          <span className="small muted">Minimum {win.minRuns} runs</span>
+          <span className="small muted">Minimum {win.minRuns} runs ({win.minRuns * 2} for red lights)</span>
         </div>
         <div className="grid-2">
           {boards.map((b, i) => (
