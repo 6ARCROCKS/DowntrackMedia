@@ -52,6 +52,20 @@ insert into dt.points_event_override (event_id, kind, note) values
   (300, 'nat', '2026 JEGS SPORTSnationals, Beech Bend, Bowling Green (BK1, moved to Aug 26-30)')
 on conflict (event_id) do update set kind = excluded.kind, note = excluded.note;
 
+-- 1c. Work-in points for races NHRA scored but never published results for (from NHRA points sheets).
+--     Real results always win: a manual row is used only when no result exists for that racer, class and event.
+create table if not exists dt.points_manual (
+  season      smallint not null,
+  category_id int      not null,
+  driver_id   int      not null,
+  event_id    int      not null,
+  points      int      not null,
+  is_win      boolean  not null default false,
+  is_ru       boolean  not null default false,
+  source      text,
+  primary key (driver_id, category_id, event_id)
+);
+
 -- 2. Points for a finish (NHRA table). lost_round = elimination round lost in (1 = first round).
 create or replace function dt.lodrs_points(p_slug text, p_field int, p_lost int, p_win boolean, p_ru boolean)
 returns int language sql immutable as $$
@@ -133,12 +147,30 @@ scored as (
     + case when b.slug like 'top-alcohol-%' then 10 + dt.ta_qual_points(b.qual_pos::int) else 0 end as points
   from base b
   where b.kind is not null
+),
+manual as (
+  select null::bigint as entry_id, m.driver_id, m.category_id, c.slug, m.season, ev.id as event_id, ev.name as event_name,
+    ev.start_date as event_date,
+    coalesce(o.kind, case when s.code = 'nhra-national' then 'nat' when s.code like 'lodrs-d%' then 'div' end) as kind,
+    nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
+    null::bigint as field_n, null::int as last_round, m.is_win, m.is_ru, m.points
+  from dt.points_manual m
+  join dt.event ev   on ev.id = m.event_id
+  join dt.series s   on s.id = ev.series_id
+  join dt.category c on c.id = m.category_id
+  left join dt.points_event_override o on o.event_id = ev.id
+  where not exists (select 1 from scored x where x.driver_id = m.driver_id and x.category_id = m.category_id and x.event_id = m.event_id)
 )
 -- One score per driver per event per class (keep the best if entered twice)
 select distinct on (driver_id, category_id, event_id)
   entry_id, driver_id, category_id, slug, season, event_id, event_name, event_date, kind, division,
   field_n, last_round, is_win, is_ru, points
-from scored
+from (
+  select entry_id, driver_id, category_id, slug, season, event_id, event_name, event_date, kind, division,
+         field_n::bigint, last_round::int, is_win, is_ru, points from scored
+  union all
+  select * from manual
+) u
 order by driver_id, category_id, event_id, points desc;
 
 create unique index pts_event_pk on dt.pts_event (driver_id, category_id, event_id);
@@ -248,7 +280,7 @@ where t.division is not null;
 create unique index pts_division_pk on dt.pts_division (season, category_id, division, driver_id);
 
 -- 6. Public read access
-grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule, dt.points_event_override to anon, authenticated;
+grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule, dt.points_event_override, dt.points_manual to anon, authenticated;
 
 -- 7. Refresh with the nightly stats run
 create or replace function dt.refresh_stats()
