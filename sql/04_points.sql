@@ -38,6 +38,16 @@ values
   ('super-street',           8, 5,  0, 0, false, true)
 on conflict (category_slug, season_from) do nothing;
 
+-- 1b. Events NHRA scores differently from their series (from NHRA's per-driver points sheets)
+create table if not exists dt.points_event_override (
+  event_id int primary key,
+  kind     text not null check (kind in ('nat','div')),
+  note     text
+);
+insert into dt.points_event_override (event_id, kind, note) values
+  (300, 'nat', '2026 Bowling Green (BK1): run with Div 3, NHRA scores it as a national event')
+on conflict (event_id) do update set kind = excluded.kind, note = excluded.note;
+
 -- 2. Points for a finish (NHRA table). lost_round = elimination round lost in (1 = first round).
 create or replace function dt.lodrs_points(p_slug text, p_field int, p_lost int, p_win boolean, p_ru boolean)
 returns int language sql immutable as $$
@@ -91,8 +101,8 @@ base as (
   select
     en.id as entry_id, en.driver_id, ra.category_id, c.slug, ev.season, ev.id as event_id, ev.name as event_name,
     coalesce(ev.start_date, ra.race_date) as event_date,
-    case when s.code = 'nhra-national' then 'nat'
-         when s.code like 'lodrs-d%' then 'div' end as kind,
+    coalesce(o.kind, case when s.code = 'nhra-national' then 'nat'
+         when s.code like 'lodrs-d%' then 'div' end) as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
     coalesce(f.field_n, ra.field_size, 0) as field_n,
     e.last_round, coalesce(en.is_winner, false) as is_win, coalesce(en.is_runner_up, false) as is_ru,
@@ -104,6 +114,7 @@ base as (
   join dt.category c  on c.id = ra.category_id
   left join elim e    on e.race_id = ra.id and e.entry_id = en.id
   left join field f   on f.race_id = ra.id
+  left join dt.points_event_override o on o.event_id = ev.id
   where en.driver_id is not null
     and c.slug in (select category_slug from dt.points_rule)
     and (s.code = 'nhra-national' or s.code like 'lodrs-d%')
@@ -222,7 +233,7 @@ where t.division is not null;
 create unique index pts_division_pk on dt.pts_division (season, category_id, division, driver_id);
 
 -- 6. Public read access
-grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule to anon, authenticated;
+grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule, dt.points_event_override to anon, authenticated;
 
 -- 7. Refresh with the nightly stats run
 create or replace function dt.refresh_stats()
@@ -238,6 +249,8 @@ as $$
   refresh materialized view concurrently dt.pts_division;
 $$;
 revoke execute on function dt.refresh_stats() from public, anon, authenticated;
+
+notify pgrst, 'reload schema';
 
 -- 8. Check: 2026 Stock national top 5 (NHRA shows Jeff Adkinson 655)
 select n.rank, d.display_name, n.total, n.nat_events || '/' || n.div_events as "N/D"
