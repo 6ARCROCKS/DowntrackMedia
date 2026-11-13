@@ -1,0 +1,18 @@
+{"event":"2026-world-finals","class":"SS","class_name":"Super Street","date":"2026-09-20","source":"https://racepdra.com/results/wp-content/uploads/2026/09/SS-1.png","read":"visual",
+"fields":["car","q","driver","hometown","rt","et","mph","note"],
+"rounds":[
+ [[["393",7,"Dan Whetstine","Laplata MD",0.002,4.727,139.99],["37",8,"Blake Molnar","Hinckley OH",0.066,4.672,164.57]],
+  [["0625",6,"Mike Freeman","Ft. Myers FL",0.044,4.667,153.74],["369",9,"Kenny Fox","Mechanicsville MD",0.083,4.841,154.90]],
+  [["1984",5,"Charles Potter","Leesville SC",0.068,4.535,160.42],["71",10,"Nick Robinson","Four Oaks NC",0.041,4.708,160.96]],
+  [["129X",4,"Brooks McMath","Chesapeake VA",0.019,4.555,160.40],["36X",11,"Matt Schalow","Virginia Beach VA",0.047,4.548,159.66]],
+  [["8722",3,"Troy Hill","Amelia VA",0.065,4.557,159.19],["4271",12,"Jessie Coulter","Bowling Green KY",0.043,4.837,144.19]],
+  [["077",2,"Austin Vincent","Central City KY",0.048,4.517,162.08],["0096",13,"Frank Saffelle III","Partlow VA",0.008,4.722,150.95]],
+  [["1",1,"Connor McGee","Pelion SC",0.053,4.501,159.72],["10",14,"Richie Stine","Woodsboro MD",0.096,4.788,149.03]]],
+ [[["8722",3,"Troy Hill","Amelia VA",-0.194,4.604,159.68,"foul"],["0625",6,"Mike Freeman","Ft. Myers FL",null,null,null,"foul broke"]],
+  [["129X",4,"Brooks McMath","Chesapeake VA",0.043,4.634,159.16],["1984",5,"Charles Potter","Leesville SC",-0.012,4.580,154.23,"foul"]],
+  [["077",2,"Austin Vincent","Central City KY",0.049,4.538,168.41],["393",7,"Dan Whetstine","Laplata MD",0.019,4.683,159.10]],
+  [["1",1,"Connor McGee","Pelion SC",0.041,4.582,163.87,"single"]]],
+ [[["1",1,"Connor McGee","Pelion SC",0.047,4.531,163.29],["129X",4,"Brooks McMath","Chesapeake VA",0.048,4.839,148.49]],
+  [["077",2,"Austin Vincent","Central City KY",0.066,4.547,167.80],["8722",3,"Troy Hill","Amelia VA",0.070,4.628,158.56]]],
+ [[["1",1,"Connor McGee","Pelion SC",0.044,4.506,164.17],["077",2,"Austin Vincent","Central City KY",0.017,4.559,159.85]]]
+]}

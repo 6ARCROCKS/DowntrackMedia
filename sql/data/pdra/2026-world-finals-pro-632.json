@@ -1,0 +1,15 @@
+{"event":"2026-world-finals","class":"632","class_name":"Pro 632","date":"2026-09-20","source":"https://racepdra.com/results/wp-content/uploads/2026/09/632-1.png","read":"visual",
+"fields":["car","q","driver","hometown","rt","et","mph","note"],
+"rounds":[
+ [[["2130",5,"Jason Ventura","Pompano Beach FL",0.685,null,null,"broke"],["13",6,"Cameron Gibson","Chaptico MD",-0.379,null,null,"foul broke"]],
+  [["1919",4,"David Cook Jr.","New Bern NC",0.043,4.183,169.13],["6596",7,"Doug Nicholl","Dearborn MI",0.052,4.313,167.05]],
+  [["802",3,"Carson Hoyle","Hickory NC",0.042,4.137,170.26],["115",8,"Gary Hood","Severn MD",0.013,4.450,158.19]],
+  [["2968",2,"Jeff Pittman","Conover NC",0.038,4.123,171.82],["B170",9,"Ryan Altman","Sarantion SC",0.117,4.153,172.10]],
+  [["1242",1,"JC Beattie Jr.","Baltimore MD",0.056,4.126,173.70],["994",10,"Corey Terry","Warrenton NC",0.269,5.000,135.25]]],
+ [[["802",3,"Carson Hoyle","Hickory NC",0.022,4.172,168.75],["1919",4,"David Cook Jr.","New Bern NC",0.036,4.222,168.24]],
+  [["1242",1,"JC Beattie Jr.","Baltimore MD",0.204,4.149,171.64,"single"]],
+  [["2968",2,"Jeff Pittman","Conover NC",0.067,4.166,168.68],["2130",5,"Jason Ventura","Pompano Beach FL",0.049,4.218,167.01]]],
+ [[["2968",2,"Jeff Pittman","Conover NC",0.006,4.472,121.61,"single"]],
+  [["1242",1,"JC Beattie Jr.","Baltimore MD",0.031,4.116,175.73],["802",3,"Carson Hoyle","Hickory NC",0.004,4.203,169.72]]],
+ [[["1242",1,"JC Beattie Jr.","Baltimore MD",0.041,4.104,176.01],["2968",2,"Jeff Pittman","Conover NC",0.022,4.170,170.99]]]
+]}

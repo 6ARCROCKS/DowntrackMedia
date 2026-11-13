@@ -1,0 +1,19 @@
+{"event":"2026-world-finals","class":"ETD","class_name":"Elite Top Dragster","date":"2026-09-20","source":"https://racepdra.com/results/wp-content/uploads/2026/09/ETD-1.png","read":"visual",
+"fields":["car","q","driver","hometown","rt","dial","et","mph","note"],
+"rounds":[
+ [[["202C",1,"Tony Careccia","Asheville NC",0.018,3.65,3.823,194.91],["A302",9,"Kyle Harris","Burford ONT",0.029,3.77,3.764,197.10]],
+  [["255B",12,"Barry Brown","Blountville TN",0.019,3.78,3.791,190.62],["219X",4,"Gray Kimble","Concord NC",0.022,3.70,3.735,198.82]],
+  [["9168",5,"Will Creasman","Leicester NC",0.006,3.72,3.714,192.69],["3267",13,"Michael White","Arden NC",0.019,3.79,3.769,193.21]],
+  [["3X22",10,"Chaz Silance","Jacksonville NC",0.002,3.77,3.782,191.97],["503",2,"Brian Anderson","Carson VA",0.005,3.69,3.717,200.08]],
+  [["212J",7,"Josh Duggins","Inman SC",0.022,3.75,3.759,192.44],["9109",15,"Russ Whitlock","Advance NC",0.031,3.79,3.809,192.44]],
+  [["118",16,"Dickie Smith","Waldorf MD",0.014,3.82,3.813,193.21],["241B",8,"Danielle Gonzalez","Wallingford CT",-0.003,3.77,3.774,196.33,"foul"]],
+  [["2114",11,"Steve Furr","Harrisburg NC",0.023,3.77,3.785,193.38],["170",3,"Alan O'Brien","Ronceverte WV",0.083,3.67,3.656,211.49]],
+  [["223T",14,"Tisha Wilson","Salisbury NC",0.033,3.77,3.790,192.88],["379E",6,"Bruce Westfall","Granville OH",-0.019,3.72,3.725,196.10,"foul"]]],
+ [[["255B",12,"Barry Brown","Blountville TN",0.003,3.80,3.809,190.24],["118",16,"Dickie Smith","Waldorf MD",-0.005,3.83,3.832,191.97,"foul"]],
+  [["202C",1,"Tony Careccia","Asheville NC",0.023,3.66,3.704,204.42],["9168",5,"Will Creasman","Leicester NC",0.022,3.73,3.800,176.58]],
+  [["3X22",10,"Chaz Silance","Jacksonville NC",0.032,3.78,3.798,195.14],["223T",14,"Tisha Wilson","Salisbury NC",0.051,3.79,3.803,192.33]],
+  [["212J",7,"Josh Duggins","Inman SC",0.012,3.75,3.767,198.12],["2114",11,"Steve Furr","Harrisburg NC",0.017,3.80,3.816,191.00]]],
+ [[["3X22",10,"Chaz Silance","Jacksonville NC",0.030,3.79,3.807,191.35],["255B",12,"Barry Brown","Blountville TN",-0.001,3.80,3.812,190.16,"foul"]],
+  [["202C",1,"Tony Careccia","Asheville NC",0.003,3.69,4.041,144.10],["212J",7,"Josh Duggins","Inman SC",null,null,null,null,"broke"]]],
+ [[["202C",1,"Tony Careccia","Asheville NC",0.001,3.68,3.777,186.59],["3X22",10,"Chaz Silance","Jacksonville NC",0.025,3.77,3.903,185.92]]]
+]}

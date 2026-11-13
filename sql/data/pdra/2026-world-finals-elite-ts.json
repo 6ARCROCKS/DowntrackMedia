@@ -1,0 +1,19 @@
+{"event":"2026-world-finals","class":"ETS","class_name":"Elite Top Sportsman","date":"2026-09-20","source":"https://racepdra.com/results/wp-content/uploads/2026/09/ETS-1.png","read":"visual",
+"fields":["car","q","driver","hometown","rt","dial","et","mph","note"],
+"rounds":[
+ [[["13",2,"Jamie Fowler","Ridgeway SC",0.021,3.79,3.818,190.19],["1965",10,"Hunter Dressler","Cumberland VA",0.046,3.88,3.926,187.34]],
+  [["314C",12,"Brian Stultz","New Lebanon OH",0.044,3.99,4.023,179.25],["2002",4,"Bruce Thrift","Waycross GA",0.065,3.79,3.804,188.23]],
+  [["1013",6,"Brian Tiffe","Middleburg Heights",0.006,3.80,3.864,178.50],["9020",14,"Tim Lawrence","Princeton WV",0.068,3.97,3.978,184.35]],
+  [["1027",11,"Vonnie Mills","Kennedyville MD",0.292,3.91,3.918,189.50],["1964",3,"Zach Houser","Lincolnton NC",null,null,null,null,"foul broke"]],
+  [["2218",1,"Randy Perkinson","South Chesterfield",0.017,3.76,3.765,192.69],["2970",9,"Travis Harvey","Greensboro NC",0.017,3.88,3.879,188.78]],
+  [["291",7,"Scott Duggins","Inman SC",0.058,3.83,5.202,93.97],["201",15,"Scott Weis","Ashland VA",-0.005,3.99,3.973,188.44,"foul"]],
+  [["200",13,"Ron Whitlock","Advance NC",0.012,3.94,3.944,188.46],["730",5,"Bryan LaFlam","Mooresville NC",0.013,3.81,3.819,187.05]],
+  [["68",8,"Dewayne Silance","Jacksonville NC",0.102,3.88,5.271,92.39],["3151",16,"Dan Ferguson","Harrisburg NC",null,null,null,null,"foul broke"]]],
+ [[["291",7,"Scott Duggins","Inman SC",0.004,3.85,3.857,189.58],["1027",11,"Vonnie Mills","Kennedyville MD",0.019,3.92,3.922,188.81]],
+  [["2218",1,"Randy Perkinson","South Chesterfield",0.034,3.77,3.810,189.23],["200",13,"Ron Whitlock","Advance NC",0.058,3.96,3.986,185.66]],
+  [["314C",12,"Brian Stultz","New Lebanon OH",0.013,4.00,4.017,179.21],["68",8,"Dewayne Silance","Jacksonville NC",0.034,3.90,3.906,190.89]],
+  [["13",2,"Jamie Fowler","Ridgeway SC",0.016,3.81,3.831,197.16],["1013",6,"Brian Tiffe","Middleburg Heights",-0.015,3.83,3.856,195.03,"foul"]]],
+ [[["13",2,"Jamie Fowler","Ridgeway SC",0.025,3.82,3.834,193.02],["314C",12,"Brian Stultz","New Lebanon OH",0.044,4.00,4.047,179.85]],
+  [["291",7,"Scott Duggins","Inman SC",0.035,3.84,3.854,193.21],["2218",1,"Randy Perkinson","South Chesterfield",0.017,3.79,3.788,183.07]]],
+ [[["291",7,"Scott Duggins","Inman SC",0.028,3.83,4.005,186.95],["13",2,"Jamie Fowler","Ridgeway SC",-0.011,3.80,3.812,197.91,"foul"]]]
+]}

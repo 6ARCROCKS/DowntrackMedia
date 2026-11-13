@@ -1,0 +1,19 @@
+{"event":"2026-world-finals","class":"PB","class_name":"Pro Boost","date":"2026-09-20","source":"https://racepdra.com/results/wp-content/uploads/2026/09/PB-1.png","read":"visual",
+"fields":["car","q","driver","hometown","rt","et","mph","note"],
+"rounds":[
+ [[["131",8,"Mike Decker III","Woodstock MD",0.029,3.614,208.91],["1974",9,"Greg Blevins Jr.","Fenton MI",-0.004,3.610,208.78,"foul"]],
+  [["3826",10,"Joel Wensley","Brooklyn MI",0.057,3.586,212.06],["09",7,"Brylon Holder","Bakersfield CA",-0.006,3.574,220.04,"foul"]],
+  [["2970",6,"Travis Harvey","Burlington NC",0.040,3.557,211.33],["99H",16,"Blake Housley","Lees Summit MO",0.041,3.625,208.78]],
+  [["933",5,"Jason Harris","Pittsboro NC",0.001,3.573,211.46],["611",12,"Ethan Steding","Carnegie PA",-0.023,3.584,210.54,"foul"]],
+  [["1132",13,"Carson Perry","Sims NC",0.030,3.599,208.39],["199",4,"Johnny Camp","Canonsburg PA",0.028,4.512,109.72]],
+  [["9191",3,"Fletcher Cox","Yazoo City MS",0.034,3.565,212.23],["2911",14,"Scott Lang","Rocky Mount NC",0.056,3.630,211.23]],
+  [["1903",2,"Randy Weatherford","Danville VA",0.043,3.576,210.54],["277",15,"Raymond Matos","Bayamon PR",0.055,3.608,210.97]],
+  [["715",1,"Ty Tutterow","Yadkinville NC",0.056,3.561,210.44],["1755",11,"Mike Decker Jr.","Parrish FL",-0.131,3.600,209.30,"foul"]]],
+ [[["3826",10,"Joel Wensley","Brooklyn MI",0.033,3.634,209.36],["1903",2,"Randy Weatherford","Danville VA",0.048,3.624,208.65]],
+  [["933",5,"Jason Harris","Pittsboro NC",0.036,3.605,211.36],["1132",13,"Carson Perry","Sims NC",0.059,3.643,208.10]],
+  [["131",8,"Mike Decker III","Woodstock MD",0.027,4.754,107.10],["715",1,"Ty Tutterow","Yadkinville NC",-0.008,3.606,208.01,"foul"]],
+  [["9191",3,"Fletcher Cox","Yazoo City MS",0.050,3.605,210.41],["2970",6,"Travis Harvey","Burlington NC",0.037,3.946,147.49]]],
+ [[["3826",10,"Joel Wensley","Brooklyn MI",0.006,3.633,209.59],["9191",3,"Fletcher Cox","Yazoo City MS",-0.018,3.607,213.91,"foul"]],
+  [["933",5,"Jason Harris","Pittsboro NC",0.036,3.617,210.90],["131",8,"Mike Decker III","Woodstock MD",0.036,3.641,206.45]]],
+ [[["933",5,"Jason Harris","Pittsboro NC",0.027,3.601,211.16],["3826",10,"Joel Wensley","Brooklyn MI",0.163,3.619,209.26]]]
+]}
