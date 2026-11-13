@@ -59,12 +59,14 @@ create table if not exists dt.points_manual (
   category_id int      not null,
   driver_id   int      not null,
   event_id    int      not null,
-  points      int      not null,
+  points      int,               -- null = waived (NHRA type WvEv): the race is dropped entirely
   is_win      boolean  not null default false,
   is_ru       boolean  not null default false,
   source      text,
   primary key (driver_id, category_id, event_id)
 );
+
+alter table dt.points_manual alter column points drop not null;
 
 -- 2. Points for a finish (NHRA table). lost_round = elimination round lost in (1 = first round).
 create or replace function dt.lodrs_points(p_slug text, p_field int, p_lost int, p_win boolean, p_ru boolean)
@@ -159,6 +161,7 @@ manual as (
   join dt.series s   on s.id = ev.series_id
   join dt.category c on c.id = m.category_id
   left join dt.points_event_override o on o.event_id = ev.id
+  where m.points is not null   -- a row with no points is a waiver: the result is removed and nothing replaces it
 )
 -- One score per driver per event per class (keep the best if entered twice)
 select distinct on (driver_id, category_id, event_id)
