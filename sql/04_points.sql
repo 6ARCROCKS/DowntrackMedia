@@ -38,19 +38,50 @@ values
   ('super-street',           8, 5,  0, 0, false, true)
 on conflict (category_slug, season_from) do nothing;
 
--- 1b. Events NHRA scores differently from their series (from NHRA's per-driver points sheets)
+-- 1b. Events NHRA scores differently from their series (from NHRA's per-driver points sheets).
+--     category_slug '*' = every class; a class-specific row wins. kind 'none' = not a points event.
 create table if not exists dt.points_event_override (
   event_id int primary key,
   kind     text not null check (kind in ('nat','div')),
   note     text
 );
-insert into dt.points_event_override (event_id, kind, note) values
+alter table dt.points_event_override add column if not exists category_slug text not null default '*';
+alter table dt.points_event_override drop constraint if exists points_event_override_kind_check;
+alter table dt.points_event_override add constraint points_event_override_kind_check check (kind in ('nat','div','none'));
+alter table dt.points_event_override drop constraint if exists points_event_override_pkey;
+alter table dt.points_event_override add primary key (event_id, category_slug);
+
+insert into dt.points_event_override (event_id, category_slug, kind, note) values
   -- 2026 SPORTSnationals: divisional race first, SPORTSnationals second on the same weekend
-  (307, 'nat', '2026 Cajun SPORTSnationals, No Problem Raceway, Belle Rose (Mar 27-29)'),
-  (324, 'nat', '2026 Canadian SPORTSnationals, Mission Raceway Park (Jun 11-12)'),
-  (284, 'nat', '2026 Testo Chesapeake SPORTSnationals, Cecil County Dragway (moved to Aug)'),
-  (300, 'nat', '2026 JEGS SPORTSnationals, Beech Bend, Bowling Green (BK1, moved to Aug 26-30)')
-on conflict (event_id) do update set kind = excluded.kind, note = excluded.note;
+  (307, '*', 'nat', '2026 Cajun SPORTSnationals, No Problem Raceway, Belle Rose (Mar 27-29)'),
+  (324, '*', 'nat', '2026 Canadian SPORTSnationals, Mission Raceway Park (Jun 11-12)'),
+  (284, '*', 'nat', '2026 Testo Chesapeake SPORTSnationals, Cecil County Dragway (moved to Aug)'),
+  (300, '*', 'nat', '2026 JEGS SPORTSnationals, Beech Bend, Bowling Green (BK1, moved to Aug 26-30)'),
+  -- Super Street has no national program: NHRA scores its SPORTSnationals race as a division event (codes 111/310/410/610)
+  (284, 'super-street', 'div', 'NHRA division code 111'),
+  (300, 'super-street', 'div', 'NHRA division code 310'),
+  (307, 'super-street', 'div', 'NHRA division code 410'),
+  (324, 'super-street', 'div', 'NHRA division code 610'),
+  -- Divisional races that are not Lucas Oil points events (on no NHRA points sheet, national or division)
+  (293, '*', 'none', 'D3 Apr 18, 2026: non-points divisional race'),
+  (304, '*', 'none', 'D3 Oct 23, 2026: non-points divisional race'),
+  (305, '*', 'none', 'D4 Feb 20, 2026: non-points divisional race'),
+  (330, '*', 'none', 'D7 Feb 19, 2026: non-points divisional race')
+on conflict (event_id, category_slug) do update set kind = excluded.kind, note = excluded.note;
+
+-- 1d. NHRA registration and home division (from NHRA's own standings). NHRA ranks only racers registered
+--     for points, and places each in the home division on their registration, not where they raced most.
+--     When a season/class has rows here, standings list only registered racers; home division falls back
+--     to the division raced most when a racer has no row.
+create table if not exists dt.points_registration (
+  season      smallint not null,
+  category_id int      not null,
+  driver_id   int      not null,
+  scope       text     not null check (scope in ('nat','div')),
+  division    smallint,          -- home division (scope 'div')
+  nhra_points int,               -- NHRA's published total, for checking
+  primary key (season, category_id, driver_id, scope)
+);
 
 -- 1c. NHRA points-sheet values: races NHRA never published results for, and races whose published
 --     results are missing rounds (bracket doesn't add up). A row here replaces the computed score.
@@ -132,8 +163,8 @@ base as (
   select
     en.id as entry_id, en.driver_id, ra.category_id, c.slug, ev.season, ev.id as event_id, ev.name as event_name,
     coalesce(ev.start_date, ra.race_date) as event_date,
-    coalesce(o.kind, case when s.code = 'nhra-national' then 'nat'
-         when s.code like 'lodrs-d%' then 'div' end) as kind,
+    nullif(coalesce(o.kind, case when s.code = 'nhra-national' then 'nat'
+         when s.code like 'lodrs-d%' then 'div' end), 'none') as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
     coalesce(nullif(ra.field_size, 0), f.field_n, 0) as field_n,   -- cars entered (shown on the site)
     coalesce(f.ladder_n, nullif(ra.field_size, 0), f.field_n, 0) as ladder_n,  -- used for points
@@ -147,7 +178,9 @@ base as (
   left join elim e    on e.race_id = ra.id and e.entry_id = en.id
   left join field f   on f.race_id = ra.id
   left join qual q    on q.entry_id = en.id
-  left join dt.points_event_override o on o.event_id = ev.id
+  left join lateral (select kind from dt.points_event_override o
+                     where o.event_id = ev.id and o.category_slug in (c.slug, '*')
+                     order by (o.category_slug = '*') limit 1) o on true
   where en.driver_id is not null
     and c.slug in (select category_slug from dt.points_rule)
     and (s.code = 'nhra-national' or s.code like 'lodrs-d%')
@@ -165,14 +198,16 @@ scored as (
 manual as (
   select null::bigint as entry_id, m.driver_id, m.category_id, c.slug, m.season, ev.id as event_id, ev.name as event_name,
     ev.start_date as event_date,
-    coalesce(o.kind, case when s.code = 'nhra-national' then 'nat' when s.code like 'lodrs-d%' then 'div' end) as kind,
+    nullif(coalesce(o.kind, case when s.code = 'nhra-national' then 'nat' when s.code like 'lodrs-d%' then 'div' end), 'none') as kind,
     nullif(substring(s.code from 'lodrs-d(\d+)'), '')::smallint as division,
     null::bigint as field_n, null::int as last_round, m.is_win, m.is_ru, m.points
   from dt.points_manual m
   join dt.event ev   on ev.id = m.event_id
   join dt.series s   on s.id = ev.series_id
   join dt.category c on c.id = m.category_id
-  left join dt.points_event_override o on o.event_id = ev.id
+  left join lateral (select kind from dt.points_event_override o
+                     where o.event_id = ev.id and o.category_slug in (c.slug, '*')
+                     order by (o.category_slug = '*') limit 1) o on true
   where m.points is not null   -- a row with no points is a waiver: the result is removed and nothing replaces it
 )
 -- One score per driver per event per class (keep the best if entered twice)
@@ -185,7 +220,7 @@ from (
   where not exists (select 1 from dt.points_manual m   -- an NHRA points-sheet value replaces a computed score
                     where m.driver_id = x.driver_id and m.category_id = x.category_id and m.event_id = x.event_id)
   union all
-  select * from manual
+  select * from manual where kind is not null
 ) u
 order by driver_id, category_id, event_id, points desc;
 
@@ -234,14 +269,17 @@ select t.*, coalesce(a.nat_events, 0) as nat_events, coalesce(a.div_events, 0) a
   coalesce(a.wins, 0) as wins, coalesce(a.runner_ups, 0) as runner_ups,
   rank() over (partition by t.season, t.category_id order by t.total desc) as rank
 from tot t
-left join att a using (season, category_id, driver_id);
+left join att a using (season, category_id, driver_id)
+where not exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id and g.scope = 'nat')
+   or exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id
+              and g.driver_id = t.driver_id and g.scope = 'nat');
 
 create unique index pts_national_pk on dt.pts_national (season, category_id, driver_id);
 
--- 5. Divisional standings: home division = the division raced most that season (NHRA uses the declared home division).
+-- 5. Divisional standings: home division = NHRA's registered home division (dt.points_registration), else the division raced most.
 --    First 8 divisional events eligible; best 5 count, at most 2 from outside the home division.
 create materialized view dt.pts_division as
-with home as (  -- home division: the one raced most that season (ties: the one raced first)
+with raced as (  -- fallback: the division raced most that season (ties: the one raced first)
   select distinct on (driver_id, category_id, season) driver_id, category_id, season, division as home_div
   from (
     select driver_id, category_id, season, division, count(*) as n, min(event_date) as first_date
@@ -249,6 +287,12 @@ with home as (  -- home division: the one raced most that season (ties: the one 
     group by driver_id, category_id, season, division
   ) x
   order by driver_id, category_id, season, n desc, first_date
+),
+home as (
+  select r.driver_id, r.category_id, r.season, coalesce(g.division, r.home_div) as home_div
+  from raced r
+  left join dt.points_registration g
+    on g.season = r.season and g.category_id = r.category_id and g.driver_id = r.driver_id and g.scope = 'div'
 ),
 d as (
   select pe.*, pr.division_first, pr.division_best, pr.division_max_out,
@@ -291,12 +335,15 @@ att as (
 select t.*, a.div_events, a.wins, a.runner_ups,
   rank() over (partition by t.season, t.category_id, t.division order by t.total desc) as rank
 from tot t join att a using (season, category_id, driver_id)
-where t.division is not null;
+where t.division is not null
+  and (not exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id and g.scope = 'div')
+       or exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id
+                  and g.driver_id = t.driver_id and g.scope = 'div'));
 
 create unique index pts_division_pk on dt.pts_division (season, category_id, division, driver_id);
 
 -- 6. Public read access
-grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule, dt.points_event_override, dt.points_manual to anon, authenticated;
+grant select on dt.pts_event, dt.pts_national, dt.pts_division, dt.points_rule, dt.points_event_override, dt.points_manual, dt.points_registration to anon, authenticated;
 
 -- 7. Refresh with the nightly stats run
 create or replace function dt.refresh_stats()
