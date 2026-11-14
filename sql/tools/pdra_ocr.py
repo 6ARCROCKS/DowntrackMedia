@@ -12,8 +12,27 @@ from PIL import Image
 HDR = ['DRIVER', 'HOMETOWN', 'CAR', 'MOTOR', 'REACTION', 'MPH']
 
 SCALE = 1.0
+
+def deskew(img):
+    """Phone photos and crooked scans: level the page using its long ruled lines."""
+    try:
+        import cv2, numpy as np
+        g = np.array(img.convert('L'))
+        k = 1200 / g.shape[1]
+        small = cv2.resize(g, None, fx=k, fy=k)
+        edges = cv2.Canny(small, 60, 180)
+        ln = cv2.HoughLinesP(edges, 1, np.pi / 1800, threshold=200, minLineLength=int(small.shape[1] * 0.45), maxLineGap=12)
+        if ln is None: return img
+        ang = [np.degrees(np.arctan2(y2 - y1, x2 - x1)) for x1, y1, x2, y2 in ln.reshape(-1, 4) if abs(y2 - y1) < abs(x2 - x1) * 0.08]
+        if not ang: return img
+        a = float(np.median(ang))
+        if abs(a) < 0.12 or abs(a) > 4: return img
+        return img.rotate(a, resample=Image.BICUBIC, fillcolor=255 if img.mode == 'L' else (255, 255, 255))
+    except Exception:
+        return img
+
 def words(img):
-    S = SCALE
+    S = SCALE if img.size[0] >= 1300 else round(1900 / img.size[0], 2)   # small web copies (most of 2024) need enlarging to read
     big = img.resize((int(img.size[0] * S), int(img.size[1] * S)), Image.LANCZOS) if S != 1 else img
     d = pytesseract.image_to_data(big, config='--psm 6', output_type=pytesseract.Output.DICT)
     out = []
@@ -24,11 +43,27 @@ def words(img):
                         line=(d['block_num'][i], d['par_num'][i], d['line_num'][i])))
     return out
 
+LINE_MODE = 'tess'
 def lines(ws):
-    by = {}
-    for w in ws: by.setdefault(w['line'], []).append(w)
+    """Group words into text lines. 'tess' trusts tesseract's line ids (best on clean scans);
+    'own' clusters by vertical centre (better on crooked phone photos)."""
+    if not ws: return []
+    if LINE_MODE == 'tess':
+        by = {}
+        for w in ws: by.setdefault(w['line'], []).append(w)
+        groups = list(by.values())
+    else:
+        hs = sorted(w['h'] for w in ws if re.search(r'[A-Za-z0-9]', w['t']))
+        H = hs[len(hs) // 2] if hs else 20
+        items = sorted(ws, key=lambda w: w['y'] + w['h'] / 2)
+        groups = []; cur = [items[0]]; cy = items[0]['y'] + items[0]['h'] / 2
+        for w in items[1:]:
+            c = w['y'] + w['h'] / 2
+            if c - cy <= H * 0.55: cur.append(w); cy = (cy * (len(cur) - 1) + c) / len(cur)
+            else: groups.append(cur); cur = [w]; cy = c
+        groups.append(cur)
     ls = []
-    for k, v in by.items():
+    for v in groups:
         v.sort(key=lambda w: w['x'])
         ys = sorted(w['y'] + w['h'] / 2 for w in v)
         ls.append(dict(y=ys[len(ys) // 2], ws=v, text=' '.join(w['t'] for w in v)))
@@ -89,7 +124,7 @@ def ok_row(r, has_dial):
     return True
 
 def parse(path, col_hint=None):
-    img = Image.open(path)
+    img = deskew(Image.open(path).convert('L'))
     W = img.size[0]
     ls = lines(words(img))
     # header row -> column x positions
@@ -184,7 +219,7 @@ def parse(path, col_hint=None):
         slow = row['et'] is not None and row['mph'] is not None and row['et'] * row['mph'] < 560   # lifted run, or a misread digit
         if not ok_row(row, has_dial) or slow:
             # second look: just this row's number strip, enlarged, digits only
-            y0 = int(min(w['y'] for w in l['ws'] if w['h'] > 8) - 6); y1 = int(max(w['y'] + w['h'] for w in l['ws'] if w['h'] < 60) + 6)
+            y0 = int(min(w['y'] for w in l['ws']) - 6); y1 = int(min(max(w['y'] + w['h'] for w in l['ws']), l['y'] + 30) + 6)
             strip = img.crop((int(xR - 70), max(0, y0), W - 8, y1)).resize((int((W - 8 - xR + 70) * 3), max(1, (y1 - y0) * 3)))
             t2 = pytesseract.image_to_string(strip, config='--psm 7 -c tessedit_char_whitelist=0123456789.-').split()
             t2 = [t for t in t2 if len(re.sub(r'\D', '', t)) >= 2]
@@ -237,7 +272,22 @@ if __name__ == '__main__':
     if 'error' in r: print(r)
 
 
+def _score(r):
+    from pdra_batch_check import check
+    rows = sum(len(p) for rd in r['rounds'] for p in rd)
+    return (0 if rows == 0 else 2 if not check(r['rounds']) else 1, rows)
+
 def parse_class(paths):
+    """Try both line-grouping modes and keep the reading whose bracket checks out (or, failing that, the fuller one)."""
+    global LINE_MODE
+    LINE_MODE = 'tess'; a = _parse_class(paths)
+    if _score(a)[0] == 2: return a
+    LINE_MODE = 'own'
+    try: b = _parse_class(paths)
+    finally: LINE_MODE = 'tess'
+    return b if _score(b) > _score(a) else a
+
+def _parse_class(paths):
     """Several pages of one class. Pages can overlap (the same pairs printed again) and a pair can straddle a page break."""
     allp = []; sigs = set(); title = ''; has_dial = False; errs = []; hint = None
     sig = lambda p: tuple((x['car'], x['et'], x['rt']) for x in p)
@@ -258,7 +308,7 @@ def parse_class(paths):
 # ---------------- Qualifying sheets ("Qualified Positions for ....") ----------------
 def parse_qual(path):
     """Rows: pos, car, driver, hometown, et, mph. Columns are found from where words line up across rows."""
-    img = Image.open(path)
+    img = deskew(Image.open(path).convert('L'))
     ls = lines(words(img))
     title = next((l['text'] for l in ls if 'Positions' in l['text'] or 'ositions for' in l['text']), '')
     rows = []
@@ -394,3 +444,100 @@ def parse_ladder(path):
     out = [[[dict(car=x['car'], driver=x['driver'], home=None, rt=x['rt'], dial=None, et=x['et'], mph=x['mph'],
                   **({'note': x['note']} if x['note'] else {}), **({'flag': x['flag']} if x.get('flag') else {})) for x in p] for p in rd] for rd in rounds]
     return dict(title=head[:120], rounds=out, ladder=True)
+
+
+# ---------------- Ladder sheets, box by box (more reliable than whole-page OCR) ----------------
+def ladder_boxes(gray):
+    import cv2, numpy as np
+    a = np.array(gray)
+    H, W = a.shape
+    bw = (a < 190).astype('uint8') * 255
+    bw = cv2.dilate(bw, np.ones((2, 2), np.uint8))
+    cnts, _ = cv2.findContours(bw, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    out = []
+    for c in cnts:
+        x, y, w, h = cv2.boundingRect(c)
+        if not (0.10 * W <= w <= 0.34 * W and 0.02 * H <= h <= 0.11 * H and 1.7 <= w / h <= 4.2): continue
+        if cv2.contourArea(c) < 0.75 * w * h: continue            # a real rectangle outline, not an L-shaped connector
+        out.append((x, y, w, h))
+    out.sort(key=lambda b: -b[2] * b[3])
+    keep = []
+    for b in out:                                                  # drop inner/outer duplicates of the same box
+        if not any(abs(b[0] - k[0]) < 12 and abs(b[1] - k[1]) < 12 and abs(b[2] - k[2]) < 24 and abs(b[3] - k[3]) < 24 for k in keep): keep.append(b)
+    if not keep: return []
+    mw = statistics.median(b[2] for b in keep)
+    return [b for b in keep if 0.8 * mw <= b[2] <= 1.25 * mw]
+
+def parse_ladder2(path):
+    img = deskew(Image.open(path).convert('L'))
+    W, Hh = img.size
+    top = pytesseract.image_to_string(img.crop((0, 0, W, int(Hh * 0.16))), config='--psm 6')
+    boxes = ladder_boxes(img)
+    if len(boxes) < 2: return dict(error='no boxes', title=' '.join(top.split())[:120])
+    entries = []
+    for (x, y, w, h) in boxes:
+        k = 300 / h if h < 300 else 1
+        crop = img.crop((x + 3, y + 3, x + w - 3, y + h - 3)).resize((int((w - 6) * k), int((h - 6) * k)), Image.LANCZOS)
+        d = pytesseract.image_to_data(crop, config='--psm 6', output_type=pytesseract.Output.DICT)
+        ws = [dict(t=d['text'][i].strip(), x=d['left'][i], y=d['top'][i] + d['height'][i] / 2, h=d['height'][i]) for i in range(len(d['text'])) if d['text'][i].strip()]
+        ch = crop.size[1]
+        for half in (0, 1):                                        # top entry, bottom entry
+            hw = [w_ for w_ in ws if (w_['y'] < ch / 2) == (half == 0)]
+            if not hw: continue
+            mid = ch * (0.25 + 0.5 * half)
+            l1 = sorted((w_ for w_ in hw if w_['y'] < mid), key=lambda w_: w_['x'])
+            l2 = sorted((w_ for w_ in hw if w_['y'] >= mid), key=lambda w_: w_['x'])
+            t1 = [re.sub(r'^[|\[\]_]+|[|\[\]_]+$', '', w_['t']) for w_ in l1]; t1 = [t for t in t1 if re.search(r'[A-Za-z0-9]', t)]
+            if not t1 or not any(re.search(r'\d', t) for t in t1[:2]) and len(t1) < 3: continue
+            nums = [fixnum(w_['t']).strip('|:;\'"`~=_') for w_ in l2]
+            nums = [n for n in nums if re.search(r'\d', n)]
+            et = mph = rt = None; note = []
+            # read from the right: MPH, ET, RT (a small qualifying position can sit in front and merge into the RT)
+            tk = [n for n in nums if len(re.sub(r'\D', '', n)) >= 2]
+            if len(tk) >= 2 and re.fullmatch(r'-?\d{2,3}[.,]?\d{2}', tk[-1]) and re.search(r'\d[.,]?\d{3}$', tk[-2]):
+                mph = num(tk[-1], 'mph'); et = num(re.search(r'\d{1,2}[.,]?\d{3}$', tk[-2]).group(0), 'et')
+                if len(tk) >= 3:
+                    rt = num(tk[-3], 'rt')
+                    if '-' in tk[-3] and rt is not None: rt = -abs(rt); note.append('foul')
+            raw2 = ' '.join(w_['t'] for w_ in l2)
+            if re.search(r'B\s*R\s*O\s*K', raw2, re.I): note.append('broke')
+            if re.search(r'foul', raw2, re.I) and 'foul' not in note: note.append('foul')
+            entries.append(dict(t=t1, bx=x, by=y + half * h / 2, rt=rt, et=et, mph=mph, note=' '.join(note), raw=' '.join(t1) + ' / ' + raw2))
+    if not entries: return dict(error='no entries', title=' '.join(top.split())[:120])
+    from collections import Counter
+    cc = Counter(re.sub(r'[^A-Z0-9/]', '', t) for en in entries for t in en['t'][1:3] if re.fullmatch(r'[A-Z][A-Z0-9/]{1,4}', t) and not re.search(r'\d{3}', t))
+    klass = cc.most_common(1)[0][0] if cc else None
+    for en in entries:
+        t = en['t']
+        k = next((i for i, x in enumerate(t) if i > 0 and re.sub(r'[^A-Z0-9/]', '', x) == klass), None)
+        if k is not None: car = t[k - 1]; rest = t[k + 1:]
+        else: car = t[0]; rest = t[1:]
+        car = re.sub(r'[^A-Za-z0-9]', '', car).upper()
+        if klass and car.startswith(klass) and len(car) > len(klass): car = car[len(klass):]
+        if re.fullmatch(r'[0-9OSIL]+', car) and re.search(r'\d', car): car = car.replace('O', '0').replace('S', '5').replace('I', '1').replace('L', '1')
+        en['car'] = car; en['driver'] = ' '.join(x for x in rest if re.search(r'[A-Za-z]', x)).strip(' .,|')
+    xs = sorted({en['bx'] for en in entries}); cols = [[xs[0]]]
+    for x in xs[1:]:
+        if x - cols[-1][-1] > W * 0.04: cols.append([x])
+        else: cols[-1].append(x)
+    rounds = []
+    for c in cols:
+        es = sorted((en for en in entries if c[0] - 2 <= en['bx'] <= c[-1] + 2), key=lambda en: en['by'])
+        byb = {}
+        for en in es: byb.setdefault((en['bx'], round(en['by'] - (0 if en is None else 0))), en)
+        pairs = {}
+        for en in es: pairs.setdefault(min(pairs, key=lambda k: abs(k - en['by']), default=None) if any(abs(k - en['by']) < Hh * 0.06 and True for k in pairs) and len(pairs[min(pairs, key=lambda k: abs(k - en['by']))]) < 2 and abs(min(pairs, key=lambda k: abs(k - en['by'])) - en['by']) < Hh * 0.06 else en['by'], []).append(en)
+        rounds.append([pairs[k] for k in sorted(pairs)])
+    for i, rd in enumerate(rounds):
+        nxt = {en['car'] for p in rounds[i + 1] for en in p} if i + 1 < len(rounds) else None
+        for p in rd:
+            if len(p) == 2 and nxt is not None:
+                a, b = p
+                if b['car'] in nxt and a['car'] not in nxt: p[0], p[1] = b, a
+                elif a['car'] not in nxt and b['car'] not in nxt: p[0]['flag'] = 'winner not found in next round'
+                elif a['car'] in nxt and b['car'] in nxt: p[0]['flag'] = 'both cars found in next round'
+            elif len(p) == 2 and nxt is None:
+                p[0]['flag'] = 'final: winner not shown on a ladder sheet'
+    out = [[[dict(car=x['car'], driver=x['driver'], home=None, rt=x['rt'], dial=None, et=x['et'], mph=x['mph'], raw=x['raw'],
+                  **({'note': x['note']} if x['note'] else {}), **({'flag': x['flag']} if x.get('flag') else {})) for x in p] for p in rd] for rd in rounds]
+    return dict(title=' '.join(top.split())[:120], rounds=out, ladder=True, klass=klass)
