@@ -46,7 +46,11 @@ base as (
     coalesce(ra.race_date, ev.start_date) as run_date,
     c.slug, c.uses_dial,
     c.slug in ('stock-eliminator', 'super-stock', 'competition-eliminator') as idx_class,
-    min(r.et) over (partition by ra.id) as race_best_et
+    min(r.et) over (partition by ra.id) as race_best_et,
+    -- Quarter-mile check: an eighth-mile race has 660' times but no 1000' times.
+    c.distance_ft,
+    count(r.ft660)  over (partition by ra.id) as race_n660,
+    count(r.ft1000) over (partition by ra.id) as race_n1000
   from dt.run r
   join dt.pairing  p  on p.id  = r.pairing_id
   join dt.race     ra on ra.id = p.race_id
@@ -125,7 +129,9 @@ cross join lateral (values
                           and f.dial is not null and f.class_index is not null
                         then case when f.dial = f.class_index then 1::numeric else 0::numeric end end)
 ) as m(metric, value)
-where m.value is not null;
+where m.value is not null
+  -- NHRA stats are quarter-mile only (nitro classes race to 1,000'): leave out races run to the eighth mile.
+  and (f.distance_ft = 1000 or f.race_n660 = 0 or f.race_n1000 * 2 >= f.race_n660);
 
 revoke all on dt.run_metric from anon, authenticated;
 
