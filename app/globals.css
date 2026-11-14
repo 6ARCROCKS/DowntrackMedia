@@ -299,3 +299,10 @@ details.round[open] > summary::before { content: '▾ '; }
 .winner:hover { background: #e6dcc8; color: var(--red); }
 .winner small { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .winner span { font-family: var(--display); font-style: italic; font-weight: 800; font-size: 17px; line-height: 1.15; overflow-wrap: anywhere; }
+
+/* ---------- Class page: view tabs and heads-up facts ---------- */
+.view-tabs a { font-weight: 700; }
+.hu-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 4px 16px 16px; }
+.hu-facts div { display: flex; flex-direction: column; gap: 2px; }
+.hu-facts b { font-family: var(--display); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.hu-facts span { color: var(--muted); font-size: 0.8rem; }

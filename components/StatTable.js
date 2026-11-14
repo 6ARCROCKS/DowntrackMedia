@@ -6,7 +6,9 @@ import { METRICS, GROUPS, metricLabel, fmt, fmtChange, thousands } from '@/lib/m
 export default function StatTable({ rows, category, compare }) {
   const byMetric = Object.fromEntries((rows || []).map((r) => [r.metric, r]));
   const classBy = compare ? Object.fromEntries(compare.map((r) => [r.metric, r])) : null;
-  const present = METRICS.filter((m) => byMetric[m.key]);
+  // Comp runs off a handicap index, not a dial, so a "package" (reaction + over/under the dial) doesn't apply.
+  const hidden = category?.slug === 'competition-eliminator' ? ['package'] : [];
+  const present = METRICS.filter((m) => byMetric[m.key] && !hidden.includes(m.key));
 
   if (!present.length) {
     return <div className="empty">No runs in this window yet.</div>;

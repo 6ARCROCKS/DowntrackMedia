@@ -227,7 +227,8 @@ order by driver_id, category_id, event_id, points desc;
 create unique index pts_event_pk on dt.pts_event (driver_id, category_id, event_id);
 create index pts_event_season on dt.pts_event (season, category_id);
 
--- 4. National standings: first N divisional + first N national entered; best N of each count
+-- 4. National standings: first N divisional + first N national entered; best N of each count.
+--    Policy (Mike, Nov 14 2026): we calculate once; wherever NHRA publishes a different total, NHRA's total is shown.
 create materialized view dt.pts_national as
 with r as (
   select pe.*, pr.div_first, pr.div_best, pr.nat_first, pr.nat_best,
@@ -265,14 +266,20 @@ att as (
     count(*) filter (where is_ru)        as runner_ups
   from dt.pts_event group by season, category_id, driver_id
 )
-select t.*, coalesce(a.nat_events, 0) as nat_events, coalesce(a.div_events, 0) as div_events,
+select season, category_id, driver_id,
+  coalesce(g.nhra_points, t.total)::bigint as total,   -- NHRA's published total wins when ours differs or we have no results
+  t.div_pts, t.nat_pts, coalesce(t.div_counted, 0) as div_counted, coalesce(t.nat_counted, 0) as nat_counted,
+  coalesce(t.counted_events, '{}') as counted_events,
+  coalesce(a.nat_events, 0) as nat_events, coalesce(a.div_events, 0) as div_events,
   coalesce(a.wins, 0) as wins, coalesce(a.runner_ups, 0) as runner_ups,
-  rank() over (partition by t.season, t.category_id order by t.total desc) as rank
+  rank() over (partition by season, category_id order by coalesce(g.nhra_points, t.total) desc) as rank,
+  t.total as calc_total                               -- what our own calculation gives (null = no results on file)
 from tot t
+full join (select season, category_id, driver_id, nhra_points from dt.points_registration where scope = 'nat') g
+  using (season, category_id, driver_id)
 left join att a using (season, category_id, driver_id)
-where not exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id and g.scope = 'nat')
-   or exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id
-              and g.driver_id = t.driver_id and g.scope = 'nat');
+where g.nhra_points is not null
+   or not exists (select 1 from dt.points_registration x where x.season = t.season and x.category_id = t.category_id and x.scope = 'nat');
 
 create unique index pts_national_pk on dt.pts_national (season, category_id, driver_id);
 
@@ -332,13 +339,21 @@ att as (
     count(*) filter (where is_ru)  as runner_ups
   from dt.pts_event where kind = 'div' group by season, category_id, driver_id
 )
-select t.*, a.div_events, a.wins, a.runner_ups,
-  rank() over (partition by t.season, t.category_id, t.division order by t.total desc) as rank
-from tot t join att a using (season, category_id, driver_id)
-where t.division is not null
-  and (not exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id and g.scope = 'div')
-       or exists (select 1 from dt.points_registration g where g.season = t.season and g.category_id = t.category_id
-                  and g.driver_id = t.driver_id and g.scope = 'div'));
+select season, category_id, coalesce(g.division, t.division) as division, driver_id,
+  coalesce(g.nhra_points, t.total)::bigint as total,   -- NHRA's published total wins when ours differs or we have no results
+  coalesce(t.events_counted, 0) as events_counted, coalesce(t.out_counted, 0) as out_counted,
+  coalesce(t.counted_events, '{}') as counted_events,
+  coalesce(a.div_events, 0) as div_events, coalesce(a.wins, 0) as wins, coalesce(a.runner_ups, 0) as runner_ups,
+  rank() over (partition by season, category_id, coalesce(g.division, t.division)
+               order by coalesce(g.nhra_points, t.total) desc) as rank,
+  t.total as calc_total
+from tot t
+full join (select season, category_id, driver_id, division, nhra_points from dt.points_registration where scope = 'div') g
+  using (season, category_id, driver_id)
+left join att a using (season, category_id, driver_id)
+where coalesce(g.division, t.division) is not null
+  and (g.nhra_points is not null
+       or not exists (select 1 from dt.points_registration x where x.season = t.season and x.category_id = t.category_id and x.scope = 'div'));
 
 create unique index pts_division_pk on dt.pts_division (season, category_id, division, driver_id);
 
