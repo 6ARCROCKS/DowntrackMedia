@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { db, indexBy } from '@/lib/db';
 import { DIVISIONS } from '@/lib/points';
+import SeriesTabs, { seriesFrom } from '@/components/SeriesTabs';
 
 export const revalidate = 3600;
 export const metadata = {
@@ -8,7 +9,8 @@ export const metadata = {
   description: 'Lucas Oil national and divisional points standings for every sportsman class, with every counted race.',
 };
 
-export default async function PointsIndex() {
+export default async function PointsIndex({ searchParams }) {
+  const sk = seriesFrom(searchParams);
   const [rules, cats] = await Promise.all([
     db('points_rule?select=category_slug,has_national,has_division&order=category_slug'),
     db('category?select=id,slug,name&order=id').then((r) => indexBy(r, 'slug')),
@@ -21,7 +23,7 @@ export default async function PointsIndex() {
   return (
     <div className="stack">
       <header>
-        <span className="eyebrow">Lucas Oil Drag Racing Series</span>
+        <span className="eyebrow">{sk === 'pdra' ? 'PDRA' : 'Lucas Oil Drag Racing Series'}</span>
         <h1>Points battles</h1>
         <p className="lead">
           National and divisional standings for every class, scored with NHRA's Lucas Oil points rules. Every racer's
@@ -29,7 +31,16 @@ export default async function PointsIndex() {
         </p>
       </header>
 
-      {list.length ? (
+      <SeriesTabs base="/points" current={sk} />
+
+      {sk === 'pdra' ? (
+        <section className="panel">
+          <div className="empty">
+            PDRA standings aren't up yet. They go live once our round-by-round totals match PDRA's published points.
+            Until then, every PDRA race is under <Link href="/events?series=pdra">Results</Link>.
+          </div>
+        </section>
+      ) : list.length ? (
         <section className="panel">
           <div className="table-wrap">
             <table className="slip">

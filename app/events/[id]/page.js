@@ -49,8 +49,8 @@ export default async function EventPage({ params }) {
     <div className="stack">
       <header>
         {ev.series_id === PDRA_SERIES_ID
-          ? <Link href={`/pdra?season=${ev.season}`} className="small">← PDRA {ev.season} results</Link>
-          : <Link href={`/events?season=${ev.season}`} className="small">← {ev.season} results</Link>}
+          ? <Link href={`/events?series=pdra&season=${ev.season}`} className="small">← PDRA {ev.season} results</Link>
+          : <Link href={`/events?season=${ev.season}`} className="small">← NHRA {ev.season} results</Link>}
         <h1 style={{ marginTop: 6 }}>{ev.name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>
           {[series?.name, placeName(venue), dateRange(ev.start_date, ev.end_date)].filter(Boolean).join(' · ')}

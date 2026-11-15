@@ -22,12 +22,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const lastName = (n = '') => n.trim().split(/\s+/).slice(-1)[0];
 
 export default async function Home() {
-  const [runs, drivers, events, cats, recent, episodes, seasonRow] = await Promise.all([
+  const [runs, drivers, events, cats, recent, recentPdra, episodes, seasonRow] = await Promise.all([
     estimate('run'),
     estimate('driver'),
     estimate('event'),
     db('category?select=id,slug,name,kind,in_scope&order=id'),
     db(`event?select=id,name,start_date,end_date,season,venue_id&series_id=neq.${PDRA_SERIES_ID}&start_date=lte.${todayIso()}&order=start_date.desc&limit=24`),
+    db(`event?select=id,name,start_date,end_date,season,venue_id&series_id=eq.${PDRA_SERIES_ID}&start_date=lte.${todayIso()}&order=start_date.desc&limit=12`),
     db('episode?select=id,show,air_date,title,youtube_id&order=air_date.desc&limit=3'),
     db('pts_national?select=season&rank=eq.1&order=season.desc&limit=1'),
   ]);
@@ -61,17 +62,34 @@ export default async function Home() {
   const nm = (id) => names[id]?.display_name || 'Unknown racer';
   const closest = board.filter((b) => b.margin !== null).sort((a, b) => a.margin - b.margin)[0];
 
-  // Only show events that actually have results loaded.
+  // Latest results, one list per series. Only events that actually have results loaded.
   const withRaces = new Set(
-    (await byIds('race', 'event_id', recent.map((e) => e.id), 'event_id')).map((r) => r.event_id),
+    (await byIds('race', 'event_id', [...recent, ...recentPdra].map((e) => e.id), 'event_id')).map((r) => r.event_id),
   );
-  const latest = recent.filter((e) => withRaces.has(e.id)).slice(0, 8);
-  const venues = indexBy(await byIds('venue', 'id', latest.map((e) => e.venue_id), 'id,name,city,state'));
+  const latest = recent.filter((e) => withRaces.has(e.id)).slice(0, 6);
+  const latestPdra = recentPdra.filter((e) => withRaces.has(e.id)).slice(0, 6);
+  const venues = indexBy(await byIds('venue', 'id', [...latest, ...latestPdra].map((e) => e.venue_id), 'id,name,city,state'));
 
-  const classes = cats.filter((c) => c.in_scope !== false && !isPdra(c));
-  const kinds = ['pro', 'sportsman', 'bracket'].filter((k) => classes.some((c) => c.kind === k));
+  // Winners at the latest PDRA race.
+  const pdraEvent = latestPdra[0];
+  const pdraRaces = pdraEvent ? await db(`race?select=id,category_id&event_id=eq.${pdraEvent.id}&order=category_id`) : [];
+  const pdraWins = pdraRaces.length
+    ? await db(`entry?select=race_id,driver_id&race_id=in.(${pdraRaces.map((r) => r.id).join(',')})&is_winner=is.true&driver_id=not.is.null`)
+    : [];
+  const pdraNames = indexBy(await byIds('driver', 'id', pdraWins.map((w) => w.driver_id), 'id,display_name'));
+  const pdraWinners = pdraRaces
+    .map((r) => ({ cat: catById[r.category_id], w: pdraWins.find((x) => x.race_id === r.id) }))
+    .filter((x) => x.w && x.cat);
+
+  const inScope = cats.filter((c) => c.in_scope !== false);
+  const SERIES_BLOCKS = [
+    { key: 'nhra', label: 'NHRA', href: '/classes', events: latest, eventsHref: '/events', classes: inScope.filter((c) => !isPdra(c)) },
+    { key: 'pdra', label: 'PDRA', href: '/classes?series=pdra', events: latestPdra, eventsHref: '/events?series=pdra', classes: inScope.filter((c) => isPdra(c)) },
+  ];
+  const kindsOf = (list) => ['pro', 'sportsman', 'bracket'].filter((k) => list.some((c) => c.kind === k));
   const maxMargin = Math.max(1, ...board.map((b) => b.margin || 0));
   const eventDay = lastWins[0]?.event_date;
+  const md = (iso) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : '');
 
   return (
     <div className="stack">
@@ -82,8 +100,8 @@ export default async function Home() {
             Every run. Every split. <em>Every racer.</em>
           </h1>
           <p className="lead">
-            Who's leaving first, who's running dead on, and who's chasing a championship. NHRA pro,
-            sportsman and bracket results for every class and every racer, back to 2022.
+            Who's leaving first, who's running dead on, and who's chasing a championship. NHRA and PDRA
+            results for every class and every racer, round by round.
           </p>
           <form className="search" action="/drivers" role="search">
             <label htmlFor="home-q" style={{ position: 'absolute', left: -9999 }}>
@@ -102,7 +120,7 @@ export default async function Home() {
         {board.length > 0 && (
           <section className="points-board" aria-labelledby="pb-title">
             <div className="pb-head">
-              <h2 id="pb-title">{season} national points</h2>
+              <h2 id="pb-title">{season} NHRA national points</h2>
               <span className="badge">Leaders</span>
             </div>
             <ol>
@@ -142,7 +160,7 @@ export default async function Home() {
           {lastWins.length > 0 && (
             <section className="winners">
               <div className="section-head" style={{ marginBottom: 10 }}>
-                <h2>Latest Wally winners</h2>
+                <h2>Latest NHRA winners</h2>
                 <Link href={`/events/${latestEventId}`} className="small">
                   {lastWins[0].event_name}
                   {eventDay ? ` · ${MONTHS[Number(eventDay.slice(5, 7)) - 1]} ${Number(eventDay.slice(8, 10))}` : ''} →
@@ -161,6 +179,23 @@ export default async function Home() {
         </div>
       )}
 
+      {pdraWinners.length > 0 && (
+        <section className="winners">
+          <div className="section-head" style={{ marginBottom: 10 }}>
+            <h2>Latest PDRA winners</h2>
+            <Link href={`/events/${pdraEvent.id}`} className="small">{pdraEvent.name} · {md(pdraEvent.start_date)} →</Link>
+          </div>
+          <div className="winner-grid">
+            {pdraWinners.map((x) => (
+              <Link key={x.cat.id} href={`/drivers/${x.w.driver_id}`} className="winner">
+                <small>{x.cat.name}</small>
+                <span>{pdraNames[x.w.driver_id]?.display_name || 'Unknown racer'}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {episodes.length > 0 && (
         <section>
           <div className="section-head"><h2>Latest shows</h2></div>
@@ -175,51 +210,47 @@ export default async function Home() {
         </section>
       )}
 
-      <section>
-        <div className="section-head">
-          <h2>Latest results</h2>
-          <Link href="/events" className="small">All events →</Link>
-        </div>
-        <div className="panel">
-          {latest.length ? (
-            <ul className="list">
-              {latest.map((e) => (
-                <li key={e.id}>
-                  <Link href={`/events/${e.id}`}>{e.name}</Link>
-                  <span className="muted small num">
-                    {venues[e.venue_id]?.name ? `${venues[e.venue_id].name} · ` : ''}
-                    {dateRange(e.start_date, e.end_date)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty">Results will show here as soon as the first event loads.</div>
-          )}
-        </div>
-      </section>
-
-      <section>
-        <div className="section-head">
-          <h2>Classes</h2>
-          <Link href="/pdra" className="small">PDRA classes and results →</Link>
-        </div>
-        <div className="stack" style={{ gap: 18 }}>
-          {kinds.map((k) => (
-            <div key={k}>
-              <div className="eyebrow" style={{ marginBottom: 8 }}>{KIND_LABEL[k]}</div>
-              <div className="grid">
-                {classes.filter((c) => c.kind === k).map((c) => (
-                  <Link key={c.id} href={`/classes/${c.slug}`} className="class-link">
-                    <span>{c.name}</span>
-                    <small>Stats →</small>
-                  </Link>
-                ))}
-              </div>
+      <div className="series-cols">
+        {SERIES_BLOCKS.map((sb) => (
+          <section key={sb.key} className="stack" style={{ gap: 16 }}>
+            <div className="section-head" style={{ marginBottom: 0 }}>
+              <h2 className="series-title">{sb.label}</h2>
+              <Link href={sb.eventsHref} className="small">All {sb.label} results →</Link>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="panel">
+              <div className="panel-head"><h3>Latest results</h3></div>
+              {sb.events.length ? (
+                <ul className="list">
+                  {sb.events.map((e) => (
+                    <li key={e.id}>
+                      <Link href={`/events/${e.id}`}>{e.name}</Link>
+                      <span className="muted small num">
+                        {venues[e.venue_id]?.name ? `${venues[e.venue_id].name} · ` : ''}
+                        {dateRange(e.start_date, e.end_date)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="empty">Results will show here as soon as the first event loads.</div>
+              )}
+            </div>
+            {kindsOf(sb.classes).map((k) => (
+              <div key={k}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>{sb.label} {KIND_LABEL[k]}</div>
+                <div className="grid">
+                  {sb.classes.filter((c) => c.kind === k).map((c) => (
+                    <Link key={c.id} href={`/classes/${c.slug}`} className="class-link">
+                      <span>{c.name}</span>
+                      <small>Stats →</small>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

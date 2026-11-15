@@ -83,10 +83,10 @@ export default async function DriverPage({ params }) {
   return (
     <div className="stack">
       <header>
-        <Link href={driver.org === 'pdra' ? '/drivers?org=pdra' : '/drivers'} className="small">← {driver.org === 'pdra' ? 'PDRA racers' : 'Racers'}</Link>
+        <Link href="/drivers" className="small">← Racers</Link>
         <h1 style={{ marginTop: 6 }}>{driver.display_name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>
-          {[driver.org === 'pdra' ? 'PDRA' : null, [driver.hometown, driver.state].filter(Boolean).join(', '), classesRun.join(' · ')].filter(Boolean).join(' — ')}
+          {[driver.org === 'pdra' ? 'PDRA' : 'NHRA', [driver.hometown, driver.state].filter(Boolean).join(', '), classesRun.join(' · ')].filter(Boolean).join(' — ')}
         </p>
         <div className="tally" style={{ marginTop: 16 }}>
           <div><b>{career.races}</b><span>Races</span></div>

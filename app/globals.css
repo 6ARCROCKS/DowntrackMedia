@@ -306,3 +306,15 @@ details.round[open] > summary::before { content: '▾ '; }
 .hu-facts div { display: flex; flex-direction: column; gap: 2px; }
 .hu-facts b { font-family: var(--display); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
 .hu-facts span { color: var(--muted); font-size: 0.8rem; }
+
+/* NHRA | PDRA switch: two equal halves */
+.series-tabs { display: grid; grid-template-columns: 1fr 1fr; max-width: 420px; border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; background: var(--paper); }
+.series-tabs a { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px 14px; text-decoration: none; color: var(--navy); }
+.series-tabs a + a { border-left: 1px solid var(--line-strong); }
+.series-tabs a b { font-family: var(--display); font-style: italic; font-weight: 800; font-size: 20px; line-height: 1.1; }
+.series-tabs a small { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.series-tabs a[aria-current='page'] { background: var(--navy); color: #fff; }
+.series-tabs a[aria-current='page'] small { color: #c9d4e4; }
+.series-cols { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@media (max-width: 820px) { .series-cols { grid-template-columns: minmax(0, 1fr); } }
+.series-title { font-family: var(--display); font-style: italic; font-weight: 800; font-size: 26px; color: var(--navy); margin: 0; }

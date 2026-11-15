@@ -34,7 +34,6 @@ export default function RootLayout({ children }) {
               <Link href="/points">Points</Link>
               <Link href="/classes">Classes</Link>
               <Link href="/drivers">Racers</Link>
-              <Link href="/pdra">PDRA</Link>
             </nav>
           </div>
         </header>
@@ -45,7 +44,7 @@ export default function RootLayout({ children }) {
             <div style={{ maxWidth: 420 }}>
               <h3>Get the Monday report</h3>
               <p className="small" style={{ margin: '6px 0 0' }}>
-                The weekend's NHRA results and the numbers behind them, every Monday.
+                The weekend's NHRA and PDRA results and the numbers behind them, every Monday.
               </p>
               <Signup />
             </div>

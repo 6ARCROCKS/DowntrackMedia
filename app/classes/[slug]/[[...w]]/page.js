@@ -94,7 +94,7 @@ export default async function ClassPage({ params }) {
   const facts = [
     KIND_LABEL[cat.kind],
     cat.index_et ? `${Number(cat.index_et).toFixed(2)} index` : null,
-    isPdra(cat) ? 'PDRA' : null,
+    isPdra(cat) ? 'PDRA' : 'NHRA',
     cat.distance_ft === 1000 ? "Races to 1,000'" : cat.distance_ft === 660 ? 'Eighth mile' : 'Quarter mile',
     isPdra(cat) ? 'Elimination rounds only' : null,
     isIndexClass(cat) ? 'Index from each car’s qualifying runs' : null,
@@ -104,8 +104,8 @@ export default async function ClassPage({ params }) {
     <div className="stack">
       <header>
         {isPdra(cat)
-          ? <Link href="/pdra" className="small">← PDRA</Link>
-          : <Link href="/classes" className="small">← All classes</Link>}
+          ? <Link href="/classes?series=pdra" className="small">← PDRA classes</Link>
+          : <Link href="/classes" className="small">← NHRA classes</Link>}
         <h1 style={{ marginTop: 6 }}>{cat.name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>{facts.join(' · ')}</p>
       </header>
