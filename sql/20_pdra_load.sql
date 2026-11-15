@@ -93,10 +93,10 @@ create temp table pp as
 select ridx, rnd, pair, nextval('dt.pairing_id_seq') as id from (select distinct ridx, rnd, pair from pu) x;
 insert into dt.pairing (id, race_id, round_code, round_type, round_no, pair_no)
 select pp.id, pr.id, 'E' || pp.rnd, 'E', pp.rnd, pp.pair from pp join pr on pr.idx = pp.ridx;
-insert into dt.run (pairing_id, entry_id, lane, dial, rt, et, mph, ov_un, is_win, red_light, breakout, package)
+-- red_light, breakout and package are generated columns (from rt and ov_un)
+insert into dt.run (pairing_id, entry_id, lane, dial, rt, et, mph, ov_un, is_win)
 select pp.id, pe.id, case pu.slot when 0 then 'single' else pu.slot::text end, pu.dial,
-       pu.rt, pu.et, pu.mph, round(pu.et - pu.dial, 3), pu.win, pu.red, pu.brk,
-       case when pu.dial is not null and pu.rt >= 0 and pu.et >= pu.dial then round(pu.rt + pu.et - pu.dial, 3) end
+       pu.rt, pu.et, pu.mph, round(pu.et - pu.dial, 3), pu.win
 from pu join pp on pp.ridx = pu.ridx and pp.rnd = pu.rnd and pp.pair = pu.pair join pe on pe.idx = pu.eidx;
 
 notify pgrst, 'reload schema';
