@@ -100,7 +100,8 @@ select pp.id, pe.id, case pu.slot when 0 then 'single' else pu.slot::text end, p
 from pu join pp on pp.ridx = pu.ridx and pp.rnd = pu.rnd and pp.pair = pu.pair join pe on pe.idx = pu.eidx;
 
 notify pgrst, 'reload schema';
-select dt.refresh_stats();
+-- Then run on its own, as a separate query (it takes ~30 minutes; keeping it out of this run keeps table locks short):
+--   select dt.refresh_stats();
 
 select (select count(*) from dt.event where source_id = 6) as events,
        (select count(*) from dt.race ra join dt.event ev on ev.id = ra.event_id where ev.source_id = 6) as races,
