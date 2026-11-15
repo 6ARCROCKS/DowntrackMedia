@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db, one, byIds, indexBy } from '@/lib/db';
-import { windowFromPath, isIndexClass, isDialInClass, fmt, dragNum, hasHeadsUp, QUALIFIED_ET_CLASSES, KIND_LABEL } from '@/lib/metrics';
+import { windowFromPath, isIndexClass, isDialInClass, fmt, dragNum, hasHeadsUp, QUALIFIED_ET_CLASSES, KIND_LABEL, isPdra } from '@/lib/metrics';
 import StatTable from '@/components/StatTable';
 import WindowTabs from '@/components/WindowTabs';
 
@@ -11,7 +11,7 @@ export const dynamicParams = true;
 // Prebuild every class's default view at deploy time; other windows build on first visit and stay cached.
 export async function generateStaticParams() {
   const cats = await db('category?select=slug,in_scope');
-  return cats.filter((c) => c.in_scope !== false).map((c) => ({ slug: c.slug, w: [] }));
+  return cats.filter((c) => c.in_scope !== false && !isPdra(c)).map((c) => ({ slug: c.slug, w: [] }));
 }
 
 export async function generateMetadata({ params }) {
@@ -52,6 +52,9 @@ export default async function ClassPage({ params }) {
   }
   if (isIndexClass(cat)) {
     boards.push({ title: 'Furthest under the index', note: 'Average under the index in qualifying', metric: 'q_under_index', order: 'desc', valueCol: 'avg_val' });
+  } else if (isPdra(cat)) {
+    if (!cat.uses_dial) boards.push({ title: 'Quickest average ET', note: 'Average eighth-mile ET, clean runs', metric: 'et', order: 'asc', valueCol: 'avg_val' });
+    boards.push({ title: 'Fastest average MPH', note: 'Average eighth-mile speed, clean runs', metric: 'mph', order: 'desc', valueCol: 'avg_val' });
   } else if (QUALIFIED_ET_CLASSES.includes(cat.slug)) {
     boards.push({ title: 'Quickest average ET', note: 'Average ET, clean runs', metric: 'et', order: 'asc', valueCol: 'avg_val' });
   } else {
@@ -91,14 +94,18 @@ export default async function ClassPage({ params }) {
   const facts = [
     KIND_LABEL[cat.kind],
     cat.index_et ? `${Number(cat.index_et).toFixed(2)} index` : null,
-    cat.distance_ft === 1000 ? "Races to 1,000'" : "Quarter mile",
+    isPdra(cat) ? 'PDRA' : null,
+    cat.distance_ft === 1000 ? "Races to 1,000'" : cat.distance_ft === 660 ? 'Eighth mile' : 'Quarter mile',
+    isPdra(cat) ? 'Elimination rounds only' : null,
     isIndexClass(cat) ? 'Index from each car’s qualifying runs' : null,
   ].filter(Boolean);
 
   return (
     <div className="stack">
       <header>
-        <Link href="/classes" className="small">← All classes</Link>
+        {isPdra(cat)
+          ? <Link href="/pdra" className="small">← PDRA</Link>
+          : <Link href="/classes" className="small">← All classes</Link>}
         <h1 style={{ marginTop: 6 }}>{cat.name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>{facts.join(' · ')}</p>
       </header>

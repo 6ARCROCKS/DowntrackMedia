@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { db, byIds, estimate, indexBy } from '@/lib/db';
-import { KIND_LABEL, thousands } from '@/lib/metrics';
+import { KIND_LABEL, thousands, isPdra, PDRA_SERIES_ID } from '@/lib/metrics';
 import { dateRange, todayIso } from '@/lib/format';
 
 export const revalidate = 3600;
@@ -27,7 +27,7 @@ export default async function Home() {
     estimate('driver'),
     estimate('event'),
     db('category?select=id,slug,name,kind,in_scope&order=id'),
-    db(`event?select=id,name,start_date,end_date,season,venue_id&start_date=lte.${todayIso()}&order=start_date.desc&limit=24`),
+    db(`event?select=id,name,start_date,end_date,season,venue_id&series_id=neq.${PDRA_SERIES_ID}&start_date=lte.${todayIso()}&order=start_date.desc&limit=24`),
     db('episode?select=id,show,air_date,title,youtube_id&order=air_date.desc&limit=3'),
     db('pts_national?select=season&rank=eq.1&order=season.desc&limit=1'),
   ]);
@@ -68,7 +68,7 @@ export default async function Home() {
   const latest = recent.filter((e) => withRaces.has(e.id)).slice(0, 8);
   const venues = indexBy(await byIds('venue', 'id', latest.map((e) => e.venue_id), 'id,name,city,state'));
 
-  const classes = cats.filter((c) => c.in_scope !== false);
+  const classes = cats.filter((c) => c.in_scope !== false && !isPdra(c));
   const kinds = ['pro', 'sportsman', 'bracket'].filter((k) => classes.some((c) => c.kind === k));
   const maxMargin = Math.max(1, ...board.map((b) => b.margin || 0));
   const eventDay = lastWins[0]?.event_date;
@@ -200,7 +200,10 @@ export default async function Home() {
       </section>
 
       <section>
-        <div className="section-head"><h2>Classes</h2></div>
+        <div className="section-head">
+          <h2>Classes</h2>
+          <Link href="/pdra" className="small">PDRA classes and results →</Link>
+        </div>
         <div className="stack" style={{ gap: 18 }}>
           {kinds.map((k) => (
             <div key={k}>

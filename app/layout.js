@@ -6,7 +6,7 @@ export const metadata = {
   metadataBase: new URL(process.env.URL || 'https://downtrackmedia.com'),
   title: { default: 'Downtrack Media', template: '%s · Downtrack Media' },
   description:
-    'NHRA pro, sportsman and bracket racing results with reaction-time, increment and dial-in stats for every class and every racer.',
+    'NHRA and PDRA drag racing results with reaction-time, increment and dial-in stats for every class and every racer.',
   openGraph: { siteName: 'Downtrack Media', type: 'website' },
 };
 
@@ -34,6 +34,7 @@ export default function RootLayout({ children }) {
               <Link href="/points">Points</Link>
               <Link href="/classes">Classes</Link>
               <Link href="/drivers">Racers</Link>
+              <Link href="/pdra">PDRA</Link>
             </nav>
           </div>
         </header>
@@ -50,7 +51,8 @@ export default function RootLayout({ children }) {
             </div>
             <div className="small" style={{ maxWidth: 360 }}>
               <p style={{ margin: 0 }}>
-                Results from NHRA.com and DragRaceCentral, 2022 to today. Stats refresh nightly.
+                NHRA results from NHRA.com and DragRaceCentral, 2022 to today. PDRA results from the
+                elimination sheets PDRA publishes, 2019 to today. Stats refresh nightly.
               </p>
               <p style={{ margin: '10px 0 0' }}>© {new Date().getFullYear()} Downtrack Media</p>
             </div>

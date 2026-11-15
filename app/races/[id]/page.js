@@ -31,7 +31,7 @@ export default async function RacePage({ params }) {
   if (!race) notFound();
 
   const [ev, cat, pairings, entries] = await Promise.all([
-    one(`event?select=id,name,season,start_date,end_date&id=eq.${race.event_id}`),
+    one(`event?select=id,name,season,start_date,end_date,series_id&id=eq.${race.event_id}`),
     one(`category?select=*&id=eq.${race.category_id}`),
     all(`pairing?select=id,round_code,round_type,round_no,pair_no&race_id=eq.${race.id}&order=round_type,round_no,pair_no`),
     all(`entry?select=id,driver_id,car_no,class_code,qual_pos,is_winner,is_runner_up&race_id=eq.${race.id}`),
@@ -55,6 +55,9 @@ export default async function RacePage({ params }) {
   const lastElim = elim[0]?.no;
 
   const thousand = cat?.distance_ft === 1000;
+  // Sheets with only reaction time, ET and MPH (PDRA): leave the increment columns out.
+  const inc = runs.some((r) => r.ft60 != null || r.ft330 != null || r.ft660 != null || r.ft1000 != null);
+  const partial = race.status === 'partial';
   const dial = !!cat?.uses_dial;
   const winner = entries.find((e) => e.is_winner);
   const runnerUp = entries.find((e) => e.is_runner_up);
@@ -71,11 +74,11 @@ export default async function RacePage({ params }) {
         </td>
         {dial && <td>{r.dial != null ? Number(r.dial).toFixed(2) : '—'}</td>}
         <td className={r.red_light ? 'redlight' : ''}>{r.red_light ? `${dragNum(r.rt)} RED` : dragNum(r.rt)}</td>
-        <td>{dragNum(r.ft60)}</td>
-        <td>{dragNum(r.ft330)}</td>
-        <td>{dragNum(r.ft660)}</td>
-        <td className="flat">{r.mph660 != null ? Number(r.mph660).toFixed(2) : '—'}</td>
-        {!thousand && <td>{dragNum(r.ft1000)}</td>}
+        {inc && <td>{dragNum(r.ft60)}</td>}
+        {inc && <td>{dragNum(r.ft330)}</td>}
+        {inc && <td>{dragNum(r.ft660)}</td>}
+        {inc && <td className="flat">{r.mph660 != null ? Number(r.mph660).toFixed(2) : '—'}</td>}
+        {inc && !thousand && <td>{dragNum(r.ft1000)}</td>}
         <td className="headline">{r.et != null ? Number(r.et).toFixed(3) : '—'}</td>
         <td>{r.mph != null ? Number(r.mph).toFixed(2) : '—'}</td>
         {dial && <td className={r.breakout ? 'breakout' : 'flat'}>{dragNum(r.ov_un, 3, true)}</td>}
@@ -89,11 +92,11 @@ export default async function RacePage({ params }) {
         <th scope="col">Racer</th>
         {dial && <th scope="col">Dial</th>}
         <th scope="col">R/T</th>
-        <th scope="col">60'</th>
-        <th scope="col">330'</th>
-        <th scope="col">660'</th>
-        <th scope="col">MPH</th>
-        {!thousand && <th scope="col">1000'</th>}
+        {inc && <th scope="col">60'</th>}
+        {inc && <th scope="col">330'</th>}
+        {inc && <th scope="col">660'</th>}
+        {inc && <th scope="col">MPH</th>}
+        {inc && !thousand && <th scope="col">1000'</th>}
         <th scope="col">ET</th>
         <th scope="col">MPH</th>
         {dial && <th scope="col">+/−</th>}
@@ -102,7 +105,7 @@ export default async function RacePage({ params }) {
   );
 
   const roundTitle = (r) => {
-    if (r.type === 'E') return r.no === lastElim ? 'Final' : `Round ${r.no ?? r.key}`;
+    if (r.type === 'E') return r.no === lastElim && !partial ? 'Final' : `Round ${r.no ?? r.key}`;
     return `${ROUND_NAME[r.type] || 'Round'} ${r.key.replace(/^\D+/, '')}`.trim();
   };
 
@@ -125,7 +128,7 @@ export default async function RacePage({ params }) {
         <Link href={`/events/${ev?.id}`} className="small">← {ev?.name}</Link>
         <h1 style={{ marginTop: 6 }}>{cat?.name || race.name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>
-          {[ev?.name, dateRange(ev?.start_date, ev?.end_date), race.field_size ? `${race.field_size} cars` : null].filter(Boolean).join(' · ')}
+          {[ev?.name, dateRange(ev?.start_date, ev?.end_date), race.field_size ? `${race.field_size} cars` : null, cat?.distance_ft === 660 ? 'Eighth mile' : null].filter(Boolean).join(' · ')}
         </p>
         {(winner || runnerUp) && (
           <p style={{ margin: '12px 0 0' }}>
@@ -134,6 +137,10 @@ export default async function RacePage({ params }) {
           </p>
         )}
       </header>
+
+      {partial && (
+        <p className="small muted" style={{ margin: 0 }}>The published sheet for this class stops before the final, so no winner is listed.</p>
+      )}
 
       {elim.length === 0 && other.length === 0 && (
         <div className="panel"><div className="empty">Round-by-round results for this class haven't loaded yet.</div></div>

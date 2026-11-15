@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { KIND_LABEL } from '@/lib/metrics';
+import { KIND_LABEL, isPdra } from '@/lib/metrics';
 
 export const revalidate = 3600;
 export const metadata = { title: 'Classes' };
 
 export default async function Classes() {
   const cats = (await db('category?select=id,slug,name,kind,index_et,distance_ft,in_scope&order=id')).filter(
-    (c) => c.in_scope !== false,
+    (c) => c.in_scope !== false && !isPdra(c),
   );
   const kinds = ['pro', 'sportsman', 'bracket'].filter((k) => cats.some((c) => c.kind === k));
 
@@ -18,7 +18,8 @@ export default async function Classes() {
         <h1>Classes</h1>
         <p className="lead">
           Pick a class for its reaction times, increments, red-light rate and dial-in or index numbers,
-          by season, last 3 races or all-time.
+          by season, last 3 races or all-time. NHRA classes are here; PDRA classes are on
+          the <Link href="/pdra">PDRA page</Link>.
         </p>
       </header>
       {kinds.map((k) => (

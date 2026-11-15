@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db, one, byIds, indexBy } from '@/lib/db';
 import { dateRange, placeName } from '@/lib/format';
+import { PDRA_SERIES_ID } from '@/lib/metrics';
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -23,7 +24,7 @@ export default async function EventPage({ params }) {
   if (!ev) notFound();
 
   const [races, cats, venue, series] = await Promise.all([
-    db(`race?select=id,category_id,name,field_size,purse_to_win&event_id=eq.${ev.id}`),
+    db(`race?select=id,category_id,name,field_size,purse_to_win,status&event_id=eq.${ev.id}`),
     db('category?select=id,slug,name,kind').then(indexBy),
     ev.venue_id ? one(`venue?select=*&id=eq.${ev.venue_id}`) : null,
     ev.series_id ? one(`series?select=name&id=eq.${ev.series_id}`) : null,
@@ -47,7 +48,9 @@ export default async function EventPage({ params }) {
   return (
     <div className="stack">
       <header>
-        <Link href={`/events?season=${ev.season}`} className="small">← {ev.season} results</Link>
+        {ev.series_id === PDRA_SERIES_ID
+          ? <Link href={`/pdra?season=${ev.season}`} className="small">← PDRA {ev.season} results</Link>
+          : <Link href={`/events?season=${ev.season}`} className="small">← {ev.season} results</Link>}
         <h1 style={{ marginTop: 6 }}>{ev.name}</h1>
         <p className="muted" style={{ margin: '8px 0 0' }}>
           {[series?.name, placeName(venue), dateRange(ev.start_date, ev.end_date)].filter(Boolean).join(' · ')}
@@ -71,7 +74,7 @@ export default async function EventPage({ params }) {
                       <td style={{ textAlign: 'left' }}>{person(w)}</td>
                       <td style={{ textAlign: 'left' }}>{person(ru)}</td>
                       <td className="flat">{r.field_size || '—'}</td>
-                      <td><Link href={`/races/${r.id}`}>Every round →</Link></td>
+                      <td><Link href={`/races/${r.id}`}>{r.status === 'partial' ? 'Early rounds →' : 'Every round →'}</Link></td>
                     </tr>
                   );
                 })}
@@ -82,6 +85,13 @@ export default async function EventPage({ params }) {
           <div className="empty">Results for this event haven't loaded yet.</div>
         )}
       </section>
+      {ev.series_id === PDRA_SERIES_ID && (
+        <p className="small muted" style={{ margin: 0 }}>
+          Read from the elimination sheets PDRA publishes. Only classes whose full ladder checks out are shown; a class with no
+          winner listed means the published sheet stops before the final.
+          {ev.source_url ? <> <a href={ev.source_url}>PDRA's sheets for this race →</a></> : null}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,17 +1,18 @@
 import Link from 'next/link';
 import { db, all, byIds, indexBy } from '@/lib/db';
 import { dateRange, todayIso } from '@/lib/format';
+import { PDRA_SERIES_ID } from '@/lib/metrics';
 
 export const revalidate = 3600;
 export const metadata = { title: 'Results' };
 
 export default async function Events({ searchParams }) {
-  const seasonsRaw = await all('event?select=season&order=season.desc', { maxRows: 5000 });
+  const seasonsRaw = await all(`event?select=season&series_id=neq.${PDRA_SERIES_ID}&order=season.desc`, { maxRows: 5000 });
   const seasons = [...new Set(seasonsRaw.map((r) => r.season))].filter(Boolean);
   const season = seasons.includes(Number(searchParams?.season)) ? Number(searchParams.season) : seasons[0];
 
   const evs = season
-    ? await db(`event?select=id,name,start_date,end_date,venue_id,series_id&season=eq.${season}&start_date=lte.${todayIso()}&order=start_date.desc`)
+    ? await db(`event?select=id,name,start_date,end_date,venue_id,series_id&season=eq.${season}&series_id=neq.${PDRA_SERIES_ID}&start_date=lte.${todayIso()}&order=start_date.desc`)
     : [];
   const loaded = new Set((await byIds('race', 'event_id', evs.map((e) => e.id), 'event_id')).map((r) => r.event_id));
   const list = evs.filter((e) => loaded.has(e.id));
@@ -26,7 +27,7 @@ export default async function Events({ searchParams }) {
       <header>
         <span className="eyebrow">Results</span>
         <h1>{season || ''} Results</h1>
-        <p className="lead">NHRA national events and Lucas Oil divisionals. Pick an event for every class and every round.</p>
+        <p className="lead">NHRA national events and Lucas Oil divisionals. Pick an event for every class and every round. PDRA results are on the <Link href="/pdra">PDRA page</Link>.</p>
       </header>
 
       {seasons.length > 1 && (
